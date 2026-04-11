@@ -1,0 +1,64 @@
+# syntax=docker/dockerfile:1.7
+# ──────────────────────────────────────────────────────────────────────
+#  Relict — RQ worker image (Phase 1 = no-op pipeline stub)
+#
+#  In Phase 2 this image grows to include fastp, vsearch, cutadapt, R +
+#  DADA2, and the bundled reference database tooling. For Phase 1 the
+#  worker simply pops jobs off Redis, sleeps briefly, and marks them
+#  succeeded — so the full request lifecycle can be exercised end-to-end
+#  before any real bioinformatics lands.
+# ──────────────────────────────────────────────────────────────────────
+
+ARG PYTHON_VERSION=3.11.11
+
+FROM python:${PYTHON_VERSION}-slim-bookworm AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    VENV_PATH=/opt/venv
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential \
+      libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv ${VENV_PATH}
+ENV PATH="${VENV_PATH}/bin:${PATH}"
+
+WORKDIR /build
+COPY pyproject.toml ./
+RUN pip install --upgrade pip setuptools wheel \
+ && pip install .
+
+# ─── Runtime ─────────────────────────────────────────────────────────
+FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    APP_HOME=/app
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libpq5 \
+      tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10002 worker \
+ && useradd  --system --uid 10002 --gid 10002 --home ${APP_HOME} --shell /usr/sbin/nologin worker
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR ${APP_HOME}
+COPY --chown=worker:worker . ${APP_HOME}/
+
+# Workspace for per-job scratch directories. Mounted as a volume in
+# docker-compose so scratch is durable across worker restarts.
+RUN mkdir -p /workspaces && chown worker:worker /workspaces
+
+USER worker
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["python", "-m", "worker.main"]
