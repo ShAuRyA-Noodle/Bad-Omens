@@ -83,9 +83,13 @@ def _detect_reference_db(amplicon: str) -> Path | None:
             silva_dir / "SILVA_138.1_SSURef_NR99_tax_silva.fasta",
         ],
         "12S_MiFish": [
+            midori2_dir / "MIDORI2_UNIQ_NUC_GB269_srRNA_RAW.fasta",
             mitofish_dir / "complete_partial_mitogenomes.fa",
         ],
-        "COI_Leray": list(midori2_dir.glob("*.fasta")) if midori2_dir.exists() else [],
+        "COI_Leray": [
+            midori2_dir / "MIDORI2_UNIQ_NUC_GB269_CO1_RAW.fasta",
+            *(list(midori2_dir.glob("*CO1*.fasta")) if midori2_dir.exists() else []),
+        ],
     }
 
     for path in candidates.get(amplicon, candidates.get("16S_V4", [])):
