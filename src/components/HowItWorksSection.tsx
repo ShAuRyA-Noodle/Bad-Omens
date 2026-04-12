@@ -1,157 +1,166 @@
-import { Card } from "@/components/ui/card";
-import { Upload, Brain, BarChart3 } from "lucide-react";
-import { motion } from "framer-motion";
-import { useInView } from "framer-motion";
 import { useRef } from "react";
+import { Copy, Terminal, Server, Cpu } from "lucide-react";
+import { motion, useScroll, useTransform } from "framer-motion";
+import { cn } from "@/lib/utils";
 
-const steps = [
+const pipelineSteps = [
   {
-    number: "01",
-    title: "Upload eDNA Sample",
-    description: "Submit your environmental DNA data in FASTA or CSV format. Our system validates and preprocesses the genetic sequences for analysis.",
-    icon: Upload,
-    color: "emerald"
+    id: "STEP_01",
+    command: "> node ingest.js --format fastq --quality=high",
+    title: "SEQ_INGESTION",
+    description: "Raw FASTA/Q payloads parsed. Quality filters apply Phred thresholds and trim adapter sequences in constant time.",
+    icon: Terminal,
+    output: "142,305 reads ingested [status: ok]",
   },
   {
-    number: "02", 
-    title: "AI Processing & Classification",
-    description: "Advanced machine learning models analyze DNA sequences, compare against reference databases, and identify species with confidence scores.",
-    icon: Brain,
-    color: "accent"
+    id: "STEP_02", 
+    command: "> py inference.py --model dna-bert-v2 --parallel",
+    title: "AI_INFERENCE",
+    description: "Transformer arrays map taxonomic barcodes. High-dimensional embeddings cluster ecological features.",
+    icon: Cpu,
+    output: "Batch processed: 0.18s/seq",
   },
   {
-    number: "03",
-    title: "Biodiversity Dashboard", 
-    description: "View comprehensive results including species taxonomy, abundance data, biodiversity indices, and downloadable reports.",
-    icon: BarChart3,
-    color: "muted"
+    id: "STEP_03",
+    command: "> curl -X POST https://api.ncbi /align",
+    title: "DB_ALIGNMENT", 
+    description: "Asynchronous requests to globally distributed curated bio-databases establish definitive lineage constraints.",
+    icon: Server,
+    output: "NCBI connected. SILVA mapped.",
+  },
+  {
+    id: "STEP_04",
+    command: "> generate_report --format json,viz",
+    title: "TOPOLOGY_OUTPUT",
+    description: "A functional ecosystem matrix is compiled containing relative abundance and Shannon-Wiener computations.",
+    icon: Copy,
+    output: "relict_manifest.json created.",
   }
 ];
 
 export const HowItWorksSection = () => {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start center", "end end"]
+  });
 
   return (
-    <section ref={ref} id="how-it-works" className="py-20 bg-muted/20 relative">
-      {/* Subtle background pattern */}
-      <div className="absolute inset-0 iso-grid opacity-10" />
-      
-      <div className="container mx-auto px-4 relative">
-        <motion.div 
-          className="text-center mb-16"
-          initial={{ opacity: 0, y: 30 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }}
-        >
-          <h2 className="text-4xl lg:text-5xl font-display font-bold mb-6 gradient-text">
-            How It Works
+    <section 
+      ref={containerRef} 
+      id="pipeline" 
+      className="relative bg-background border-t border-white/5 py-24 sm:py-32"
+    >
+      <div className="container mx-auto px-4 md:px-8 relative z-10 w-full max-w-5xl">
+        <div className="mb-20">
+          <div className="flex items-center space-x-2 text-primary font-mono text-xs uppercase tracking-widest mb-4">
+            <span className="w-2 h-2 bg-primary"></span>
+            <span>Architecture // Pipeline Execution</span>
+          </div>
+          <h2 className="text-4xl sm:text-5xl font-heading font-black text-white uppercase tracking-tighter">
+            Data <span className="text-neon-cyan">Topology.</span>
           </h2>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-            Our AI-powered pipeline transforms environmental DNA samples into 
-            actionable biodiversity insights in three simple steps.
-          </p>
-        </motion.div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {steps.map((step, index) => (
-            <motion.div 
-              key={step.number} 
-              className="relative"
-              initial={{ opacity: 0, y: 50 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: index * 0.2 }}
-            >
-              <Card className="p-8 glass-strong hover-lift hover-glow h-full group">
-                <div className="text-center space-y-6">
-                  {/* Step number with enhanced styling */}
-                  <motion.div 
-                    className="inline-flex items-center justify-center w-16 h-16 bg-gradient-hero rounded-full text-white font-display font-bold text-xl relative"
-                    whileHover={{ scale: 1.1, rotate: 5 }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                  >
-                    {step.number}
-                    <div className="absolute inset-0 rounded-full bg-gradient-hero opacity-0 group-hover:opacity-20 blur-lg transition-opacity" />
-                  </motion.div>
-
-                  {/* Icon with hover animation */}
-                  <motion.div 
-                    className={`inline-flex items-center justify-center w-12 h-12 bg-${step.color}/10 rounded-lg relative`}
-                    whileHover={{ scale: 1.15 }}
-                    transition={{ type: "spring", stiffness: 400 }}
-                  >
-                    <step.icon className={`w-6 h-6 text-${step.color} data-point-glow`} />
-                  </motion.div>
-
-                  {/* Content */}
-                  <div>
-                    <h3 className="text-xl font-display font-semibold mb-4 group-hover:text-emerald transition-colors">
-                      {step.title}
-                    </h3>
-                    <p className="text-muted-foreground leading-relaxed">
-                      {step.description}
-                    </p>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Enhanced connection line */}
-              {index < steps.length - 1 && (
-                <motion.div 
-                  className="hidden md:block absolute top-16 -right-4 w-8 h-0.5 bg-gradient-to-r from-emerald/50 to-transparent z-10"
-                  initial={{ scaleX: 0 }}
-                  animate={isInView ? { scaleX: 1 } : {}}
-                  transition={{ duration: 0.8, delay: 0.5 + index * 0.2 }}
-                />
-              )}
-            </motion.div>
-          ))}
         </div>
 
-        {/* Enhanced technical details */}
-        <motion.div 
-          className="mt-16 text-center"
-          initial={{ opacity: 0, y: 30 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6, delay: 0.8 }}
-        >
-          <Card className="p-8 glass-strong max-w-4xl mx-auto hover-glow">
-            <motion.h3 
-              className="text-2xl font-display font-semibold mb-6 gradient-text"
-              whileHover={{ scale: 1.05 }}
-              transition={{ type: "spring", stiffness: 300 }}
-            >
-              Powered by Advanced AI
-            </motion.h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-              {[
-                {
-                  title: "DNA-BERT Models",
-                  description: "Transformer architecture trained on genomic sequences for accurate species classification"
-                },
-                {
-                  title: "Reference Databases", 
-                  description: "Integration with NCBI, MGnify, and curated taxonomic databases for comprehensive coverage"
-                },
-                {
-                  title: "Quality Metrics",
-                  description: "Confidence scores, abundance estimates, and biodiversity indices with statistical validation"
-                }
-              ].map((item, index) => (
-                <motion.div 
-                  key={item.title}
-                  whileHover={{ y: -5 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                >
-                  <div className="font-semibold mb-2 text-emerald">{item.title}</div>
-                  <div className="text-muted-foreground">
-                    {item.description}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </Card>
-        </motion.div>
+        {/* Vertical Pipeline Graph */}
+        <div className="relative pl-8 sm:pl-16">
+          {/* Main descending pipeline trace line */}
+          <div className="absolute top-0 left-[15px] sm:left-[31px] w-[2px] h-full bg-white/10 z-0">
+            <motion.div 
+              className="absolute top-0 left-0 w-full bg-primary"
+              style={{ scaleY: scrollYProgress, transformOrigin: "top" }}
+            />
+          </div>
+
+          <div className="space-y-24 sm:space-y-32">
+            {pipelineSteps.map((step, index) => {
+              // We reveal the nodes based on scroll depth
+              const isActive = useTransform(
+                scrollYProgress, 
+                [0, Math.min(1, index * 0.25), Math.min(1, (index + 0.5) * 0.25)], 
+                [0, 0, 1]
+              );
+              
+              const yOffset = useTransform(
+                scrollYProgress,
+                [0, Math.min(1, index * 0.25), Math.min(1, (index + 0.5) * 0.25)], 
+                [50, 50, 0]
+              );
+
+              return (
+                <div key={step.id} className="relative z-10 grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-8">
+                  {/* The Node Connection Point */}
+                  <motion.div 
+                    className="absolute -left-[30px] sm:-left-[46px] top-6 w-[30px] h-[30px] rounded-sm border-2 bg-background flex items-center justify-center z-20"
+                    style={{
+                      borderColor: useTransform(isActive, (v) => v > 0.5 ? "hsl(var(--primary))" : "rgba(255,255,255,0.2)"),
+                    }}
+                  >
+                    <motion.div 
+                      className="w-[10px] h-[10px]"
+                      style={{
+                        backgroundColor: useTransform(isActive, (v) => v > 0.5 ? "hsl(var(--primary))" : "transparent"),
+                      }}
+                    />
+                  </motion.div>
+
+                  {/* Step ID / Execution Context */}
+                  <motion.div 
+                    style={{ opacity: isActive, y: yOffset }}
+                    className="font-mono text-sm"
+                  >
+                    <div className="text-gray-500 mb-1">[{step.id}]</div>
+                    <div className="text-white font-bold mb-4">{step.title}</div>
+                    <div className="hidden md:flex p-3 border border-white/10 bg-white/5 items-start space-x-3 text-gray-400 hud-bracket">
+                      <step.icon className="w-5 h-5 text-secondary shrink-0" />
+                      <div className="text-xs leading-relaxed">{step.description}</div>
+                    </div>
+                  </motion.div>
+
+                  {/* Terminal Execution Window */}
+                  <motion.div 
+                    style={{ opacity: isActive, y: yOffset }}
+                    className="w-full"
+                  >
+                    <div className="border border-white/20 bg-black text-xs font-mono w-full shadow-[0_0_15px_rgba(0,0,0,1)]">
+                      <div className="border-b border-white/20 bg-white/5 py-1 px-3 flex justify-between text-gray-600">
+                        <span>bash 80x24</span>
+                        <span>[x]</span>
+                      </div>
+                      <div className="p-4 sm:p-6 space-y-4">
+                        <div className="text-gray-400">
+                          <span className="text-secondary">{step.command.split(" ")[0]} </span>
+                          <span>{step.command.substring(step.command.indexOf(" ") + 1)}</span>
+                        </div>
+                        <motion.div 
+                          className="pt-4 text-neon-green"
+                          initial={{ opacity: 0 }}
+                          whileInView={{ opacity: 1 }}
+                          viewport={{ once: false, margin: "-100px" }}
+                          transition={{ delay: 0.3 }}
+                        >
+                          {step.output}
+                        </motion.div>
+                        <motion.div 
+                          className="w-2 h-4 bg-gray-500"
+                          animate={{ opacity: [1, 0, 1] }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Mobile description fallback */}
+                    <div className="md:hidden mt-4 text-xs font-mono text-gray-400 border-l border-primary/50 pl-3">
+                      {step.description}
+                    </div>
+                  </motion.div>
+
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </section>
   );
