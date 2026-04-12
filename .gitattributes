@@ -1,0 +1,72 @@
+# Normalize line endings across platforms.
+# Without this, Windows contributors produce LF->CRLF conversion warnings
+# on every `git add`, and blames become noisy.
+
+* text=auto eol=lf
+
+# Windows scripts stay CRLF.
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# Shell scripts always LF.
+*.sh        text eol=lf
+Makefile    text eol=lf
+
+# Python / JS / TS / configs — LF.
+*.py        text eol=lf
+*.pyi       text eol=lf
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.json      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.toml      text eol=lf
+*.md        text eol=lf
+*.html      text eol=lf
+*.css       text eol=lf
+*.scss      text eol=lf
+*.sql       text eol=lf
+*.ini       text eol=lf
+*.cfg       text eol=lf
+*.env       text eol=lf
+*.env.*     text eol=lf
+
+# Dockerfiles — LF.
+Dockerfile              text eol=lf
+Dockerfile.*            text eol=lf
+.dockerignore           text eol=lf
+docker-compose*.yml     text eol=lf
+
+# Binary assets — never touch.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.ico       binary
+*.pdf       binary
+*.zip       binary
+*.gz        binary
+*.tar       binary
+*.svg       binary
+
+# Bioinformatics / large data — binary so Git never munges line endings.
+*.fastq     binary
+*.fastq.gz  binary
+*.fq        binary
+*.fq.gz     binary
+*.fasta     binary
+*.fa        binary
+*.fna       binary
+*.bam       binary
+*.sam       binary
+*.cram      binary
+*.vcf       binary
+*.biom      binary
+*.qza       binary
+*.qzv       binary
