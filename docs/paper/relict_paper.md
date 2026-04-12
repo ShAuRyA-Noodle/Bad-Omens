@@ -6,7 +6,7 @@ Thapar Institute of Engineering and Technology, Patiala, India
 
 ORCID: 0009-0000-7351-0237
 
-**Correspondence:** Shaurya Punj, paneermomos10@gmail.com
+**Correspondence:** Shaurya Punj, workwithshaurya10@gmail.com
 
 ---
 
