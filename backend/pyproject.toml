@@ -20,7 +20,7 @@ dependencies = [
     # ─── Web framework ──────────────────────────────────────────────
     "fastapi==0.115.6",
     "uvicorn[standard]==0.34.0",
-    "python-multipart==0.0.20",         # multipart/form-data uploads
+    "python-multipart>=0.0.27",         # multipart/form-data uploads — CVE chain in <0.0.27
     "websockets==14.1",                  # for FastAPI WebSocket
 
     # ─── Configuration & validation ─────────────────────────────────
@@ -43,8 +43,8 @@ dependencies = [
 
     # ─── Security ───────────────────────────────────────────────────
     "argon2-cffi==23.1.0",               # argon2id password hashing
-    "pyjwt==2.10.1",                     # JWT with cryptography backend
-    "cryptography==44.0.0",
+    "pyjwt>=2.12.0",                     # auth-bypass via unknown `crit` header in <2.12.0
+    "cryptography>=46.0.6",              # SECT subgroup-attack chain in <46.0.6
 
     # ─── Logging & observability ────────────────────────────────────
     "structlog==24.4.0",
@@ -57,7 +57,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     # ─── Test ───────────────────────────────────────────────────────
-    "pytest==8.3.4",
+    "pytest>=9.0.3",
     "pytest-asyncio==0.25.2",
     "pytest-cov==6.0.0",
     "pytest-mock==3.14.0",
