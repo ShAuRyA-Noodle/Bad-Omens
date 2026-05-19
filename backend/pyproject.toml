@@ -18,28 +18,28 @@ keywords = [
 
 dependencies = [
     # ─── Web framework ──────────────────────────────────────────────
-    "fastapi==0.115.6",
-    "uvicorn[standard]==0.34.0",
+    "fastapi==0.136.1",
+    "uvicorn[standard]==0.47.0",
     "python-multipart>=0.0.27",         # multipart/form-data uploads — CVE chain in <0.0.27
-    "websockets==14.1",                  # for FastAPI WebSocket
+    "websockets==14.2",                  # for FastAPI WebSocket
 
     # ─── Configuration & validation ─────────────────────────────────
-    "pydantic==2.10.4",
-    "pydantic-settings==2.7.1",
-    "email-validator==2.2.0",
+    "pydantic==2.13.4",
+    "pydantic-settings==2.14.1",
+    "email-validator==2.3.0",
 
     # ─── Database (async) ───────────────────────────────────────────
-    "sqlalchemy[asyncio]==2.0.36",
-    "asyncpg==0.30.0",                   # async Postgres driver
-    "alembic==1.14.0",
-    "psycopg[binary]==3.2.3",            # sync driver for Alembic
+    "sqlalchemy[asyncio]==2.0.49",
+    "asyncpg==0.31.0",                   # async Postgres driver
+    "alembic==1.18.4",
+    "psycopg[binary]==3.3.4",            # sync driver for Alembic
 
     # ─── Object storage (S3 / MinIO) ────────────────────────────────
-    "minio==7.2.12",
+    "minio==7.2.20",
 
     # ─── Job queue ──────────────────────────────────────────────────
-    "redis==5.2.1",
-    "rq==2.1.0",
+    "redis==5.3.1",
+    "rq==2.8.0",
 
     # ─── Security ───────────────────────────────────────────────────
     "argon2-cffi==23.1.0",               # argon2id password hashing
@@ -51,23 +51,23 @@ dependencies = [
 
     # ─── HTTP client (for external APIs in later phases) ────────────
     "httpx==0.28.1",
-    "tenacity==9.0.0",                   # retry with backoff
+    "tenacity==9.1.4",                   # retry with backoff
 ]
 
 [project.optional-dependencies]
 dev = [
     # ─── Test ───────────────────────────────────────────────────────
     "pytest>=9.0.3",
-    "pytest-asyncio==0.25.2",
-    "pytest-cov==6.0.0",
-    "pytest-mock==3.14.0",
+    "pytest-asyncio==0.26.0",
+    "pytest-cov==6.3.0",
+    "pytest-mock==3.15.1",
     "httpx==0.28.1",                      # also used by TestClient
-    "testcontainers[postgres,redis,minio]==4.9.0",
-    "faker==33.3.0",                      # only for test fixtures — never for prod data
+    "testcontainers[postgres,redis,minio]==4.14.2",
+    "faker==33.3.1",                      # only for test fixtures — never for prod data
 
     # ─── Lint / type / format ───────────────────────────────────────
-    "ruff==0.9.1",
-    "mypy==1.14.1",
+    "ruff==0.15.13",
+    "mypy==1.20.2",
     "types-redis==4.6.0.20241004",
 ]
 
