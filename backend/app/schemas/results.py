@@ -88,3 +88,25 @@ class JobResultsSummary(BaseModel):
     n_assigned: int
     diversity: DiversityPublic | None
     amplicon: str
+
+
+class EIIComponentPublic(BaseModel):
+    key: str
+    name: str
+    weight: float
+    available: bool
+    value: float | None = None
+    detail: str = ""
+
+
+class IntegrityIndexPublic(BaseModel):
+    """Ecosystem Integrity Index for a job — see docs/methods/eii.md."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: uuid.UUID
+    version: str
+    score: float | None
+    grade: str | None
+    assessed_weight: float
+    components: list[EIIComponentPublic]

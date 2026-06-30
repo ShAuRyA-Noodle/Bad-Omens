@@ -18,6 +18,7 @@ from app.db.models import (
     ASV,
     ConservationCache,
     DiversityMetric,
+    IntegrityIndex,
     Job,
     JobStatus,
     Provenance,
@@ -28,6 +29,8 @@ from app.schemas.provenance import ProvenancePublic
 from app.schemas.results import (
     ASVWithTaxon,
     DiversityPublic,
+    EIIComponentPublic,
+    IntegrityIndexPublic,
     JobResultsSummary,
     OrdinationResponse,
     TaxonPublic,
@@ -271,3 +274,34 @@ async def job_provenance(
         )
 
     return ProvenancePublic.model_validate(prov)
+
+
+@router.get(
+    "/integrity",
+    response_model=IntegrityIndexPublic,
+    summary="Ecosystem Integrity Index for a completed job",
+)
+async def job_integrity(
+    job_id: uuid.UUID,
+    user: CurrentUser,
+    session: SessionDep,
+) -> IntegrityIndexPublic:
+    """Return the job's EII with its full, traceable component breakdown."""
+    job = await _get_succeeded_job(session, job_id, user)
+    row = await session.scalar(
+        select(IntegrityIndex).where(IntegrityIndex.job_id == job.id)
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No integrity index computed for this job.",
+        )
+    raw_components = row.components.get("components", []) if isinstance(row.components, dict) else []
+    return IntegrityIndexPublic(
+        job_id=job.id,
+        version=row.version,
+        score=row.score,
+        grade=row.grade,
+        assessed_weight=row.assessed_weight,
+        components=[EIIComponentPublic(**c) for c in raw_components],
+    )

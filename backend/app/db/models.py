@@ -193,6 +193,13 @@ class Job(UUIDPrimaryKey, Timestamped, Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    integrity_index: Mapped[IntegrityIndex | None] = relationship(
+        "IntegrityIndex",
+        back_populates="job",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Sample(UUIDPrimaryKey, Timestamped, Base):
@@ -375,6 +382,35 @@ class Provenance(UUIDPrimaryKey, Timestamped, Base):
     job: Mapped[Job] = relationship("Job", back_populates="provenance")
 
 
+# ─── Ecosystem Integrity Index ──────────────────────────────────────────
+
+
+class IntegrityIndex(UUIDPrimaryKey, Timestamped, Base):
+    """Computed Ecosystem Integrity Index for a job (see docs/methods/eii.md).
+
+    ``score``/``grade`` are nullable: a sample with nothing assessable yields a
+    null score and Relict shows "not assessable" rather than a fabricated 0.
+    ``components`` is the full, traceable breakdown also written into the signed
+    manifest.
+    """
+
+    __tablename__ = "integrity_indices"
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    version: Mapped[str] = mapped_column(String(16), nullable=False)
+    score: Mapped[float | None] = mapped_column(Float)
+    grade: Mapped[str | None] = mapped_column(String(4))
+    assessed_weight: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    components: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    job: Mapped[Job] = relationship("Job", back_populates="integrity_index")
+
+
 # ─── Signing key ────────────────────────────────────────────────────────
 
 
@@ -412,6 +448,7 @@ __all__ = [
     "Amplicon",
     "ConservationCache",
     "DiversityMetric",
+    "IntegrityIndex",
     "Job",
     "JobStatus",
     "Provenance",

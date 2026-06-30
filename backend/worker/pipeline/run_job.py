@@ -269,6 +269,47 @@ def run_job(job_id: str) -> dict[str, str]:
             stage_results.append(ord_result.to_dict())
             _emit(uid, "stage.completed", f"Ordination done — {ord_result.metrics.get('n_clusters', '?')} clusters", stage="ordination", progress=0.95)
 
+            # ─── Ecosystem Integrity Index ────────────────────────────
+            # Computed from the real diversity + conservation signals and
+            # appended to stage_results BEFORE the manifest is generated, so the
+            # EII (and its full component breakdown) is covered by the signature.
+            from worker.pipeline.integrity_index import compute_eii
+
+            _emit(uid, "stage.started", "Computing Ecosystem Integrity Index", stage="integrity_index", progress=0.955)
+            cons_records = _load_conservation_json(conservation_result) if conservation_result else []
+            api_degraded = (
+                bool(conservation_result.metrics.get("api_degraded"))
+                if conservation_result else False
+            )
+            eii_result = compute_eii(
+                richness=div_result.metrics.get("richness"),
+                shannon=div_result.metrics.get("shannon"),
+                evenness=div_result.metrics.get("evenness"),
+                conservation_records=cons_records,
+                api_degraded=api_degraded,
+            )
+            stage_results.append({
+                "stage": "integrity_index",
+                "tool": "relict-eii",
+                "tool_version": eii_result.version,
+                "metrics": eii_result.to_dict(),
+            })
+            from app.db.models import IntegrityIndex
+            session.add(IntegrityIndex(
+                job_id=job.id,
+                version=eii_result.version,
+                score=eii_result.score,
+                grade=eii_result.grade,
+                assessed_weight=eii_result.assessed_weight,
+                components=eii_result.to_dict(),
+            ))
+            eii_msg = (
+                f"Ecosystem Integrity Index: {eii_result.grade} ({eii_result.score})"
+                if eii_result.score is not None
+                else "Ecosystem Integrity Index: not assessable for this sample"
+            )
+            _emit(uid, "stage.completed", eii_msg, stage="integrity_index", progress=0.958)
+
             # ─── Persist results to Postgres ──────────────────────────
             _persist_results(
                 session, job, sample,
