@@ -4,10 +4,11 @@ title: "Relict: A Reproducible Environmental DNA Analysis Platform with Conserva
 abstract: >
   Relict is an open-source, reproducible platform for environmental
   DNA analysis. It unifies a standard amplicon bioinformatics pipeline
-  (fastp → vsearch/DADA2 → SILVA/MIDORI2/MitoFish → scikit-bio), automated
-  conservation-status cross-referencing (GBIF + IUCN Red List), signed
-  reproducibility manifests, and citizen-science submission of
-  DNA-derived occurrences to GBIF — all behind a single web interface.
+  (fastp → vsearch UNOISE3 with de novo chimera removal → SILVA/MIDORI2 →
+  scikit-bio), automated conservation-status cross-referencing (GBIF + IUCN
+  Red List), Ed25519-signed reproducibility manifests, and citizen-science
+  export of DNA-derived occurrences as Darwin Core Archives — all behind a
+  single web interface.
 authors:
   - family-names: "Punj"
     given-names: "Shaurya"

@@ -80,7 +80,9 @@ where = ["."]
 include = ["app*", "worker*"]
 
 # ──────────────────────────────────────────────────────────────────────
-#  Quality gates — enforced in CI from Phase 1h onward.
+#  Quality gates — ruff + mypy + pytest run on every push/PR via
+#  .github/workflows/ci.yml. The coverage gate below is enforced locally
+#  (`make ci`); CI defers the % gate to Phase B until the pipeline has tests.
 # ──────────────────────────────────────────────────────────────────────
 
 [tool.ruff]

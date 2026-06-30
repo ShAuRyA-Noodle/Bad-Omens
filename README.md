@@ -21,7 +21,7 @@
 - **Real taxonomy** — assigned against SILVA 138.1 (436K sequences) and MIDORI2 GenBank 269 (1.8M sequences)
 - **Real conservation status** — every detected species cross-referenced against GBIF (occurrence data) and the IUCN Red List (EN/VU/CR/LC categories)
 - **Real diversity metrics** — Shannon, Simpson, Chao1, richness, evenness computed by scikit-bio
-- **Signed provenance manifests** — input hashes, tool versions, DB versions, output hashes, SHA256 signature
+- **Signed provenance manifests** — input hashes, tool versions, DB versions, output hashes, Ed25519 signature (verifiable at `/public-key`)
 - **GBIF-ready exports** — Darwin Core Archive, CSV, BIOM 2.1.0 format
 
 Six amplicon markers supported: 16S V4, 12S MiFish, COI Leray, 18S V9, rbcL, ITS2.
@@ -86,7 +86,7 @@ FASTQ upload
 [2] Dereplication         — vsearch 2.28.1
    │
    ▼
-[3] ASV inference         — vsearch UNOISE3
+[3] ASV inference         — vsearch UNOISE3 + uchime3_denovo (chimera removal)
    │
    ▼
 [4] Taxonomy assignment   — vsearch vs SILVA 138.1 / MIDORI2 GB269
@@ -101,7 +101,7 @@ FASTQ upload
 [7] Ordination            — UMAP + HDBSCAN
    │
    ▼
-[8] Provenance manifest   — SHA256 signature, all tool versions recorded
+[8] Provenance manifest   — Ed25519 signature, all tool versions recorded
    │
    ▼
 Interactive dashboard + DwC-A / CSV / BIOM exports
@@ -170,7 +170,7 @@ The [`render.yaml`](./render.yaml) blueprint provisions four services on Render 
    render ssh relict-worker
    bash scripts/download_references.sh
    ```
-   SILVA 138.1 alone is ~5 GB; the blueprint provisions 20 GB which covers SILVA + MIDORI2 + MitoFish.
+   SILVA 138.1 alone is ~5 GB; the blueprint provisions 20 GB which covers SILVA + MIDORI2.
 
 ### Why object storage isn't provisioned
 
