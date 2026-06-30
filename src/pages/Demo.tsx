@@ -19,7 +19,7 @@ const Demo = () => {
               <TerminalSquare className="w-8 h-8 ml-4 text-gray-600" />
             </h1>
             <p className="text-sm text-gray-400 max-w-2xl border-l border-white/20 pl-4 py-1">
-              Upload raw environmental FASTA or FASTQ payloads. Sys daemon will parse reads through the BERT transformer array and output an interactive topology matrix.
+              Upload raw environmental FASTQ reads. The worker runs fastp QC, vsearch UNOISE3 ASV inference and dechimerization, taxonomy against SILVA/MIDORI2, GBIF + IUCN conservation cross-referencing, and emits a signed provenance manifest.
             </p>
           </div>
           

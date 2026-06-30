@@ -3,38 +3,41 @@ import { Copy, Terminal, Server, Cpu } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+// Each step describes exactly what the real pipeline does. No fabricated
+// counts, no machine-learning theatre — these are the actual published,
+// deterministic tools invoked by the worker (see backend/worker/pipeline/).
 const pipelineSteps = [
   {
     id: "STEP_01",
-    command: "> node ingest.js --format fastq --quality=high",
-    title: "SEQ_INGESTION",
-    description: "Raw FASTA/Q payloads parsed. Quality filters apply Phred thresholds and trim adapter sequences in constant time.",
+    command: "> fastp --in1 reads.fastq.gz --cut_front --cut_tail",
+    title: "QC_TRIMMING",
+    description: "Raw FASTQ reads are quality-trimmed and adapter-clipped with fastp. A JSON report records read counts before and after filtering.",
     icon: Terminal,
-    output: "142,305 reads ingested [status: ok]",
+    output: "quality-trimmed reads + fastp.json report",
   },
   {
     id: "STEP_02",
-    command: "> py inference.py --model dna-bert-v2 --parallel",
-    title: "AI_INFERENCE",
-    description: "Transformer arrays map taxonomic barcodes. High-dimensional embeddings cluster ecological features.",
+    command: "> vsearch --cluster_unoise --uchime3_denovo",
+    title: "ASV_INFERENCE",
+    description: "Reads are dereplicated, denoised into amplicon sequence variants with vsearch UNOISE3, then de novo dechimerized. Published, deterministic algorithms — no neural network, no black box.",
     icon: Cpu,
-    output: "Batch processed: 0.18s/seq",
+    output: "dechimerized ASVs (asvs.fasta)",
   },
   {
     id: "STEP_03",
-    command: "> curl -X POST https://api.ncbi /align",
-    title: "DB_ALIGNMENT",
-    description: "Asynchronous requests to globally distributed curated bio-databases establish definitive lineage constraints.",
+    command: "> vsearch --usearch_global asvs.fasta --db SILVA",
+    title: "TAXONOMY_+_CONSERVATION",
+    description: "ASVs are assigned taxonomy against SILVA 138.1 / MIDORI2, then each species is cross-referenced live against GBIF occurrence data and IUCN Red List status.",
     icon: Server,
-    output: "NCBI connected. SILVA mapped.",
+    output: "lineage + IUCN status per ASV",
   },
   {
     id: "STEP_04",
-    command: "> generate_report --format json,viz",
-    title: "TOPOLOGY_OUTPUT",
-    description: "A functional ecosystem matrix is compiled containing relative abundance and Shannon-Wiener computations.",
+    command: "> relict provenance --sign ed25519",
+    title: "SIGNED_MANIFEST",
+    description: "scikit-bio computes diversity metrics, then every input hash, tool version, reference-DB version and output hash is recorded and Ed25519-signed into a publicly verifiable provenance manifest.",
     icon: Copy,
-    output: "relict_manifest.json created.",
+    output: "provenance.json (Ed25519-signed)",
   }
 ];
 

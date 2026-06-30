@@ -121,7 +121,7 @@ export const ImpactSection = () => {
               <ul className="space-y-3 text-muted-foreground">
                 <li className="flex items-start space-x-2">
                   <div className="w-2 h-2 bg-emerald rounded-full mt-2 flex-shrink-0"></div>
-                  <span>One-command reproducible pipelines (fastp → vsearch/DADA2 → SILVA/MIDORI2 → diversity metrics)</span>
+                  <span>One-command reproducible pipelines (fastp → vsearch UNOISE3 → SILVA/MIDORI2 → diversity metrics)</span>
                 </li>
                 <li className="flex items-start space-x-2">
                   <div className="w-2 h-2 bg-emerald rounded-full mt-2 flex-shrink-0"></div>
@@ -129,11 +129,11 @@ export const ImpactSection = () => {
                 </li>
                 <li className="flex items-start space-x-2">
                   <div className="w-2 h-2 bg-emerald rounded-full mt-2 flex-shrink-0"></div>
-                  <span>BIOM / QIIME2 / phyloseq-compatible exports</span>
+                  <span>BIOM, Darwin Core Archive, and CSV exports</span>
                 </li>
                 <li className="flex items-start space-x-2">
                   <div className="w-2 h-2 bg-emerald rounded-full mt-2 flex-shrink-0"></div>
-                  <span>Benchmark reports against published studies</span>
+                  <span>Benchmark reports with committed, re-runnable scripts</span>
                 </li>
               </ul>
             </div>
