@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend · typecheck · lint · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck (tsc --noEmit)
+        run: npx tsc --noEmit -p tsconfig.app.json
+      - name: Lint (eslint)
+        run: npm run lint
+      - name: Build (vite)
+        run: npm run build
+
+  backend:
+    name: Backend · ruff · mypy · pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Lint (ruff check)
+        run: ruff check app worker tests
+      - name: Type check (mypy --strict)
+        run: mypy app worker
+      - name: Unit tests
+        # Integration tests (Postgres/Redis/MinIO via testcontainers) and the
+        # 75% coverage gate land in Phase B, once the bioinformatics pipeline
+        # has its own tests. Until then we run the unit suite — which must pass —
+        # and report coverage without gating on a number we cannot yet honestly
+        # meet. See docs/AUDIT_AND_TRANSFORMATION_PLAN.md (Phase B).
+        run: pytest -m "not integration" --cov-fail-under=0
+
+  honesty-guards:
+    name: Honesty guards · no fabricated data · no shell=True
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No shell=True in backend
+        run: |
+          if grep -rn "shell=True" backend --include=*.py; then
+            echo "::error::shell=True found — pipeline must use list-arg subprocess calls"; exit 1
+          fi
+          echo "ok: no shell=True"
+      - name: No eval()/exec() in backend
+        run: |
+          if grep -rnE "\beval\(|\bexec\(" backend/app backend/worker --include=*.py; then
+            echo "::error::eval()/exec() found in backend"; exit 1
+          fi
+          echo "ok: no eval/exec"
+      - name: No fabricated metrics or fake telemetry in the frontend
+        run: |
+          # Specific literals that were purged in Phase A. Re-introducing any of
+          # them re-breaks the project's central "no fabricated metrics" promise.
+          if grep -rniE "dna-bert|bert transformer array|142,305|2\.4M seqs|\+12% from baseline|relict-node-01" src; then
+            echo "::error::a previously-removed fabricated UI literal was reintroduced"; exit 1
+          fi
+          echo "ok: no known fabricated UI literals"
+      - name: No 'sha256:' relabeled as a signature in provenance
+        run: |
+          # The signature must be a real Ed25519 signature, never a relabeled hash.
+          if grep -rn 'signature.*=.*f"sha256:' backend --include=*.py; then
+            echo "::error::manifest signature must be a real Ed25519 signature, not a relabeled SHA256"; exit 1
+          fi
+          echo "ok: no relabeled-hash signatures"

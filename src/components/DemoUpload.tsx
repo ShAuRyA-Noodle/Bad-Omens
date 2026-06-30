@@ -71,7 +71,7 @@ export const DemoUpload = () => {
           setIsProcessing(false);
           setError(data.message || "Pipeline failed");
         }
-      } catch {}
+      } catch { /* best-effort: failures surface via job status / polling */ }
     };
 
     ws.onerror = () => {
@@ -88,7 +88,7 @@ export const DemoUpload = () => {
             }
             clearInterval(pollInterval);
           }
-        } catch {}
+        } catch { /* best-effort: failures surface via job status / polling */ }
       }, 3000);
       return () => clearInterval(pollInterval);
     };

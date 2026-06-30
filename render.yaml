@@ -18,7 +18,7 @@
 #      REFERENCES_ROOT (default /data/references) and run the downloader
 #      script once after first deploy:
 #        render ssh relict-worker
-#        bash scripts/download_references.sh
+#        python scripts/download_references.py
 #
 #  After deploying this blueprint:
 #    1. Set CORS_ORIGINS on relict-api to your Vercel frontend URL.
@@ -48,6 +48,9 @@ services:
     rootDir: backend
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
+    # Apply DB migrations before each deploy so a fresh stack boots into a
+    # valid schema instead of 500ing on every query.
+    preDeployCommand: alembic upgrade head
     autoDeploy: true
     envVars:
       - key: ENVIRONMENT
