@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import io
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import Response
@@ -16,7 +17,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
-from app.db.models import ASV, ConservationCache, DiversityMetric, Job, JobStatus, Provenance, Sample
+from app.db.models import (
+    ASV,
+    ConservationCache,
+    DiversityMetric,
+    Job,
+    JobStatus,
+    Provenance,
+    Sample,
+)
 from app.services.dwca import generate_dwca
 from app.services.report import generate_html_report
 
@@ -198,7 +207,7 @@ async def export_biom(
     sample_id = sample_obj.filename if sample_obj else str(job.id)
 
     rows = []
-    for i, asv in enumerate(asvs):
+    for _i, asv in enumerate(asvs):
         tax = asv.taxon
         lineage = ""
         if tax:
@@ -280,7 +289,7 @@ async def export_report(
     species_names: set[str] = set()
     asv_dicts = []
     for asv in asvs_db:
-        d: dict = {
+        d: dict[str, Any] = {
             "sequence": asv.sequence,
             "abundance": asv.abundance,
             "length": asv.length,
@@ -303,7 +312,7 @@ async def export_report(
                 species_names.add(f"{g} {s}".strip() if s else g)
         asv_dicts.append(d)
 
-    cons_data: dict = {"species_queried": 0, "species_with_gbif": 0, "species_with_iucn": 0, "threatened_count": 0, "records": []}
+    cons_data: dict[str, Any] = {"species_queried": 0, "species_with_gbif": 0, "species_with_iucn": 0, "threatened_count": 0, "records": []}
     if species_names:
         cached = list(await session.scalars(
             select(ConservationCache).where(ConservationCache.species.in_(species_names))

@@ -18,6 +18,7 @@ Outputs:
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 from pathlib import Path
@@ -113,10 +114,7 @@ def _compute_metrics(counts: np.ndarray) -> dict[str, float]:
         doubletons = float(np.sum(counts == 2))
         chao1 = richness + (singletons * (singletons - 1)) / (2 * max(doubletons, 1))
 
-    if richness > 1:
-        evenness = shannon / math.log(richness)
-    else:
-        evenness = 0.0
+    evenness = shannon / math.log(richness) if richness > 1 else 0.0
 
     return {
         "richness": richness,
@@ -138,9 +136,7 @@ def _extract_abundances(fasta: Path) -> dict[str, int]:
                 size = 1
                 for part in header.split(";"):
                     if part.startswith("size="):
-                        try:
+                        with contextlib.suppress(ValueError, IndexError):
                             size = int(part.split("=")[1])
-                        except (ValueError, IndexError):
-                            pass
                 abundances[seq_id] = size
     return abundances

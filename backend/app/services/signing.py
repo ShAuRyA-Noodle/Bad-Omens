@@ -10,6 +10,7 @@ The key is a singleton: a partial unique index on ``signing_keys.is_active``
 the first job to run on a fresh database mints the keypair and every
 subsequent job reuses it.
 """
+
 from __future__ import annotations
 
 from sqlalchemy import select

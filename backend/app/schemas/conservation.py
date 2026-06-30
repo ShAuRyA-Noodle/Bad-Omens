@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import uuid  # noqa: TC003
 from datetime import datetime  # noqa: TC003
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -17,7 +18,7 @@ class ConservationPublic(BaseModel):
     iucn_category: str | None
     iucn_assessment_year: int | None
     is_invasive: bool
-    legal_flags: dict | None
+    legal_flags: dict[str, Any] | None
     fetched_at: datetime
 
 

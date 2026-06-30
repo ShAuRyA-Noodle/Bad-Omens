@@ -20,8 +20,10 @@ tool/metrics, and output file hashes (by basename, not absolute path). Lists
 are sorted by a stable key so element order can't change the hash. The SHA256
 of this payload is what gets signed.
 """
+
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 from pathlib import PurePosixPath, PureWindowsPath
@@ -145,10 +147,8 @@ def sha256_file_cached(path: Any) -> str:
         pass
 
     digest = sha256_file(p)
-    try:
+    with contextlib.suppress(OSError):
         sidecar.write_text(digest + "\n")
-    except OSError:
-        pass
     return digest
 
 

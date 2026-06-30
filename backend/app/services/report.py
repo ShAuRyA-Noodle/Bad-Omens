@@ -11,7 +11,7 @@ attaches to a publication as supplementary material.
 """
 from __future__ import annotations
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -69,9 +69,12 @@ def generate_html_report(
         gbif_count = r.get("gbif_occurrence_count") or 0
         trend = flags.get("iucn_population_trend") or "-"
         iucn_class = ""
-        if iucn in ("CR", "EN"): iucn_class = "iucn-en"
-        elif iucn in ("VU",): iucn_class = "iucn-vu"
-        elif iucn in ("LC", "NT"): iucn_class = "iucn-lc"
+        if iucn in ("CR", "EN"):
+            iucn_class = "iucn-en"
+        elif iucn in ("VU",):
+            iucn_class = "iucn-vu"
+        elif iucn in ("LC", "NT"):
+            iucn_class = "iucn-lc"
         cons_rows += f"""
         <tr>
             <td>{r['species']}</td>

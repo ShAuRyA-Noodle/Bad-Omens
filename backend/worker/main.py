@@ -37,7 +37,9 @@ def main() -> int:
 
     # Prefer the regular Worker (fork-based) on Linux; fall back to the
     # SimpleWorker on platforms without fork() (e.g. Windows CI).
-    worker_cls: type[Worker] = Worker if hasattr(signal, "SIGCHLD") else SimpleWorker
+    worker_cls: type[Worker] | type[SimpleWorker] = (
+        Worker if hasattr(signal, "SIGCHLD") else SimpleWorker
+    )
     worker = worker_cls(queues, connection=redis_conn)
 
     log.info(

@@ -4,6 +4,7 @@ These prove the property the old code faked: a manifest signature is a real
 cryptographic signature — it requires the private key to produce, the public
 key to verify, and fails if a single byte of the signed message changes.
 """
+
 from __future__ import annotations
 
 from app.core import signing as crypto

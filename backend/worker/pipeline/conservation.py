@@ -7,9 +7,11 @@ module:
    (``/species/match``) to get a canonical taxon key.
 2. Queries the GBIF Occurrence API for a global occurrence count
    so the user knows how well-documented the species is.
-3. Queries the IUCN Red List API (v4) for the conservation status
-   (LC / NT / VU / EN / CR / EW / EX), population trend, and
-   assessment year.
+3. Resolves the IUCN Red List conservation status (LC / NT / VU / EN /
+   CR / EW / EX) via GBIF's mirrored ``iucnRedListCategory`` endpoint —
+   keyed by the GBIF taxon key from step 1. (We use GBIF's mirror rather
+   than the IUCN API directly; the provenance manifest records the real
+   source as ``gbif-iucn-mirror`` accordingly.)
 4. Flags known invasive species against the Global Invasive Species
    Database (GISD) — currently via a curated local list; API
    integration is Phase 3.5.
@@ -30,16 +32,19 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-
 from app.core.config import get_settings
 from app.core.logging import get_logger
+
 from worker.pipeline import StageResult, StageTimer, ensure_stage_dir
 
 log = get_logger(__name__)
 
 GBIF_SPECIES_MATCH_URL = "https://api.gbif.org/v1/species/match"
 GBIF_OCCURRENCE_SEARCH_URL = "https://api.gbif.org/v1/occurrence/search"
-IUCN_SPECIES_URL = "https://apiv3.iucnredlist.org/api/v3/species"
+# IUCN Red List category is read from GBIF's mirror (api.gbif.org/v1/species/
+# {key}/iucnRedListCategory), not IUCN's own API — see _iucn_lookup. The
+# provenance source is recorded as "gbif-iucn-mirror".
+CONSERVATION_SOURCE = "gbif-api-v1,gbif-iucn-mirror"
 CACHE_TTL_DAYS = 30
 
 
@@ -126,7 +131,7 @@ def run(
             return StageResult(
                 stage_name="conservation",
                 tool="gbif+iucn",
-                tool_version="gbif-api-v1,iucn-api-v3",
+                tool_version=CONSERVATION_SOURCE,
                 runtime_seconds=timer.elapsed,
                 input_files=[str(taxonomy_tsv)],
                 output_files=[str(output_json)],
@@ -165,7 +170,7 @@ def run(
     return StageResult(
         stage_name="conservation",
         tool="gbif+iucn",
-        tool_version="gbif-api-v1,iucn-api-v3",
+        tool_version=CONSERVATION_SOURCE,
         runtime_seconds=timer.elapsed,
         input_files=[str(taxonomy_tsv)],
         output_files=[str(output_json)],

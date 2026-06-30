@@ -111,6 +111,8 @@ ignore = [
     "E501",    # line length — handled by formatter, not blocker
     "PLR0913", # too many arguments (FastAPI routes need them)
     "PLR0912", # too many branches — some stage orchestrators need them
+    "PLR0915", # too many statements — the run_job pipeline orchestrator is
+               # intentionally a single long, linear sequence of stages
     "PLR2004", # magic-value comparisons are fine in tests and config
     "S101",    # use of assert — fine in tests
 
@@ -140,6 +142,11 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106", "PLR2004"]
 "app/db/migrations/**" = ["N806", "N999"]
+# The worker shells out to trusted, hardcoded bioinformatics binaries
+# (fastp, vsearch, cutadapt) with list args — no shell, no user input in the
+# executable name. S603 (subprocess call) / S607 (partial executable path)
+# are accepted here by design.
+"worker/**" = ["S603", "S607"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -161,7 +168,7 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["minio.*", "rq.*", "testcontainers.*"]
+module = ["minio.*", "rq.*", "testcontainers.*", "umap.*", "hdbscan.*", "skbio.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

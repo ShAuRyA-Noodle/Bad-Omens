@@ -20,6 +20,7 @@ table. The private key never leaves the server; the public key is served at
 a public endpoint and embedded in every manifest so anyone can verify offline
 (see ``backend/scripts/verify_manifest.py``).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -35,6 +36,7 @@ from app.core.manifest import (
     sha256_file,
     sha256_file_cached,
 )
+
 from worker import PIPELINE_VERSION, TOOL_VERSIONS
 from worker.pipeline import StageResult, StageTimer, ensure_stage_dir
 
@@ -57,13 +59,21 @@ def generate_manifest(
     reference_dbs: list[dict[str, Any]],
     parameters: dict[str, Any],
     output_files: list[dict[str, Any]] | None = None,
+    tool_versions: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build the provenance manifest dict (content only — unsigned).
 
     Pure function: no I/O, no signing. ``timestamp_utc`` is informational and
     is intentionally excluded from the canonical hash so the manifest stays
     reproducible across runs (see :mod:`app.core.manifest`).
+
+    ``tool_versions`` should be the *detected* runtime versions
+    (:func:`worker.tool_versions.detect_tool_versions`). When omitted (unit
+    tests) it falls back to the pinned :data:`worker.TOOL_VERSIONS`. The pinned
+    baseline is always recorded as ``tool_versions_expected`` so the manifest
+    surfaces any drift between what was pinned and what actually ran.
     """
+    detected = tool_versions if tool_versions is not None else TOOL_VERSIONS
     return {
         "schema_version": "1.0",
         "job_id": job_id,
@@ -71,7 +81,8 @@ def generate_manifest(
         "pipeline": {
             "name": "Relict",
             "version": PIPELINE_VERSION,
-            "tool_versions": TOOL_VERSIONS,
+            "tool_versions": detected,
+            "tool_versions_expected": TOOL_VERSIONS,
         },
         "inputs": input_files,
         "parameters": parameters,
@@ -90,6 +101,7 @@ def run(
     reference_dbs: list[dict[str, Any]],
     parameters: dict[str, Any],
     output_files: list[dict[str, Any]] | None = None,
+    tool_versions: dict[str, str] | None = None,
     signing_private_key: bytes | None = None,
     logger: Any = None,
 ) -> StageResult:
@@ -114,6 +126,7 @@ def run(
             reference_dbs=reference_dbs,
             parameters=parameters,
             output_files=output_files,
+            tool_versions=tool_versions,
         )
 
         # Hash + sign the canonical (deterministic) content, not the whole
@@ -126,9 +139,7 @@ def run(
             manifest["signature"] = crypto.sign(signing_private_key, canonical)
             manifest["public_key"] = {
                 "algorithm": "ed25519",
-                "key_b64": crypto.public_key_b64(
-                    crypto.public_from_private(signing_private_key)
-                ),
+                "key_b64": crypto.public_key_b64(crypto.public_from_private(signing_private_key)),
             }
         else:
             # Never relabel the hash as a signature. Unsigned means unsigned.

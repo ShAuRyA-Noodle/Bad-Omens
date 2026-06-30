@@ -6,6 +6,7 @@ hash ignores wall-clock timestamps, per-stage runtimes, and the random
 job-id-bearing absolute paths. These tests pin that behaviour, plus the
 sign/verify integration over the canonical bytes.
 """
+
 from __future__ import annotations
 
 import copy
@@ -24,7 +25,9 @@ def _manifest(*, timestamp: str, runtime: float, job_id: str) -> dict:
         "pipeline": {"name": "Relict", "version": "0.2.0", "tool_versions": {"vsearch": "2.28.1"}},
         "inputs": [{"filename": "sample_R1.fastq.gz", "sha256": "a" * 64, "size_bytes": 1234}],
         "parameters": {"amplicon": "16S_V4"},
-        "reference_databases": [{"name": "SILVA_138.1", "path": f"/data/{job_id}/silva.udb", "sha256": "b" * 64}],
+        "reference_databases": [
+            {"name": "SILVA_138.1", "path": f"/data/{job_id}/silva.udb", "sha256": "b" * 64}
+        ],
         "stages": [
             {
                 "stage": "qc",

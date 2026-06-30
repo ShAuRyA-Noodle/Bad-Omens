@@ -15,6 +15,7 @@ anyone editing the manifest can recompute it. A real Ed25519 signature
 requires the private key to produce and the public key to verify, and fails
 if a single byte of the signed content changes.
 """
+
 from __future__ import annotations
 
 import base64
@@ -71,7 +72,7 @@ def verify(public_raw: bytes, message: bytes, signature: str) -> bool:
     if not signature.startswith(SIGNATURE_PREFIX):
         return False
     try:
-        raw_sig = base64.b64decode(signature[len(SIGNATURE_PREFIX):], validate=True)
+        raw_sig = base64.b64decode(signature[len(SIGNATURE_PREFIX) :], validate=True)
     except (ValueError, binascii.Error):
         return False
     try:

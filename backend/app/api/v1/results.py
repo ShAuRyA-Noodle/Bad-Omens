@@ -14,7 +14,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
-from app.db.models import ASV, ConservationCache, DiversityMetric, Job, JobStatus, Provenance, Sample, Taxon
+from app.db.models import (
+    ASV,
+    ConservationCache,
+    DiversityMetric,
+    Job,
+    JobStatus,
+    Provenance,
+    Sample,
+)
 from app.schemas.conservation import ConservationPublic, ConservationSummary
 from app.schemas.provenance import ProvenancePublic
 from app.schemas.results import (

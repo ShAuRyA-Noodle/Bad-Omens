@@ -20,6 +20,7 @@ Error handling:
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import shutil
@@ -28,24 +29,25 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.db.models import ASV, ConservationCache, DiversityMetric, Job, JobStatus, Sample, Taxon
 from app.services.queue import publish_job_event_sync
 from app.services.signing import get_or_create_signing_key
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session
+
 from worker import PIPELINE_VERSION, TOOL_VERSIONS
 from worker.pipeline import StageError
 from worker.pipeline import conservation as conservation_stage
 from worker.pipeline import denoise_vsearch as denoise_stage
-from worker.pipeline import provenance as provenance_stage
 from worker.pipeline import dereplicate as derep_stage
 from worker.pipeline import diversity as diversity_stage
 from worker.pipeline import ordination as ordination_stage
+from worker.pipeline import provenance as provenance_stage
 from worker.pipeline import qc as qc_stage
 from worker.pipeline import taxonomy as tax_stage
+from worker.tool_versions import detect_tool_versions
 
 log = get_logger("worker.pipeline")
 
@@ -66,7 +68,7 @@ def _references_root() -> Path:
     return Path(get_settings().REFERENCES_ROOT)
 
 
-def _sync_engine():
+def _sync_engine() -> Engine:
     settings = get_settings()
     return create_engine(
         settings.database_url_sync,
@@ -273,9 +275,13 @@ def run_job(job_id: str) -> dict[str, str]:
             )
 
             # ─── Compute parameter hash ───────────────────────────────
+            # Record the versions actually installed in this worker, not the
+            # hardcoded pins — the manifest must reflect what really ran.
+            detected_versions = detect_tool_versions()
             pipeline_params = {
                 "pipeline_version": PIPELINE_VERSION,
-                "tool_versions": TOOL_VERSIONS,
+                "tool_versions": detected_versions,
+                "tool_versions_expected": TOOL_VERSIONS,
                 "amplicon": str(job.amplicon),
             }
             param_str = json.dumps(pipeline_params, sort_keys=True)
@@ -334,6 +340,7 @@ def run_job(job_id: str) -> dict[str, str]:
                 reference_dbs=ref_db_info,
                 parameters=pipeline_params,
                 output_files=output_files_manifest,
+                tool_versions=detected_versions,
                 signing_private_key=signing_key.private_key,
                 logger=log,
             )
@@ -493,10 +500,8 @@ def _read_fasta_with_sizes(fasta: Path) -> dict[str, tuple[str, int]]:
                 current_size = 1
                 for part in header.split(";"):
                     if part.startswith("size="):
-                        try:
+                        with contextlib.suppress(ValueError, IndexError):
                             current_size = int(part.split("=")[1])
-                        except (ValueError, IndexError):
-                            pass
                 current_seq = []
             elif current_id:
                 current_seq.append(line.upper())
@@ -545,7 +550,8 @@ def _load_conservation_json(conservation_result: Any) -> list[dict[str, Any]]:
             p = Path(f)
             if p.exists():
                 data = json.loads(p.read_text())
-                return data.get("records", [])
+                records = data.get("records", [])
+                return records if isinstance(records, list) else []
     return []
 
 

@@ -24,7 +24,7 @@ from typing import Any
 import numpy as np
 
 from worker import TOOL_VERSIONS
-from worker.pipeline import StageError, StageResult, StageTimer, ensure_stage_dir
+from worker.pipeline import StageResult, StageTimer, ensure_stage_dir
 
 K = 5
 UMAP_N_NEIGHBORS = 15

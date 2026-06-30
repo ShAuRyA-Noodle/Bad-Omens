@@ -197,8 +197,7 @@ def _extract_lineage_from_target(target_id: str, ref_db: Path) -> list[str]:
     if not desc:
         return []
 
-    lineage_parts = [p.strip() for p in desc.split(";") if p.strip()]
-    return lineage_parts
+    return [p.strip() for p in desc.split(";") if p.strip()]
 
 
 def _index_ref_headers(ref_db: Path) -> dict[str, str]:

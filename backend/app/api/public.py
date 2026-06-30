@@ -14,6 +14,7 @@ Both are mounted at the application root (no ``/api/v1`` prefix) so the
 public key has a stable, memorable URL that the offline verifier and the
 research paper can cite.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -92,8 +93,14 @@ async def verify_manifest(body: VerifyRequest) -> VerifyResponse:
         signature_ok = False
         detail = "Manifest carries no signature."
     else:
-        signature_ok = crypto.verify(key.public_key, manifest_core.canonical_bytes(manifest), signature)
-        detail = "Signature valid." if signature_ok else "Signature does not verify against the server key."
+        signature_ok = crypto.verify(
+            key.public_key, manifest_core.canonical_bytes(manifest), signature
+        )
+        detail = (
+            "Signature valid."
+            if signature_ok
+            else "Signature does not verify against the server key."
+        )
 
     if content_hash_ok and not signature_ok and key is not None and signature:
         detail = "Content hash matches but the signature is invalid — possible tampering."
