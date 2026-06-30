@@ -96,6 +96,13 @@ class Settings(BaseSettings):
         ".fa.gz",
     )
 
+    # ─── Rate limiting / quotas ───────────────────────────────────────
+    # Auth endpoints are IP-rate-limited (Redis fixed window) to blunt
+    # credential stuffing / brute force. Per-user concurrent-job caps stop a
+    # single account from flooding the worker queue.
+    RATE_LIMIT_AUTH_PER_MINUTE: int = 10
+    MAX_CONCURRENT_JOBS_PER_USER: int = 5
+
     # ─── External APIs (used in later phases) ─────────────────────────
     IUCN_REDLIST_TOKEN: SecretStr | None = None
     GBIF_USERNAME: str | None = None

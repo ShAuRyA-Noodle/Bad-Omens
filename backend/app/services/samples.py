@@ -4,12 +4,14 @@ from __future__ import annotations
 from datetime import UTC
 from typing import TYPE_CHECKING, BinaryIO
 
+from sqlalchemy import func, select
+
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.models import Job, JobStatus, Sample, User
 from app.services.jobs import enqueue_job
 from app.services.queue import publish_job_event
-from app.services.storage import StoredObject, get_storage
+from app.services.storage import FileTooLarge, StoredObject, get_storage
 
 if TYPE_CHECKING:
     import uuid
@@ -32,6 +34,10 @@ class EmptySample(SampleError):
 
 
 class SampleTooLarge(SampleError):
+    pass
+
+
+class TooManyActiveJobs(SampleError):
     pass
 
 
@@ -66,6 +72,24 @@ async def upload_sample(
     it until the worker is wired up.
     """
     _check_filename(filename)
+    settings = get_settings()
+
+    # Per-user concurrency cap: one account cannot flood the worker queue.
+    active_jobs = await session.scalar(
+        select(func.count())
+        .select_from(Job)
+        .where(
+            Job.user_id == user.id,
+            Job.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]),
+        )
+    )
+    if active_jobs is not None and active_jobs >= settings.MAX_CONCURRENT_JOBS_PER_USER:
+        msg = (
+            f"You already have {active_jobs} job(s) queued or running "
+            f"(limit {settings.MAX_CONCURRENT_JOBS_PER_USER}). "
+            "Wait for one to finish before uploading another."
+        )
+        raise TooManyActiveJobs(msg)
 
     job = Job(user_id=user.id, status=JobStatus.QUEUED)
     session.add(job)
@@ -75,24 +99,20 @@ async def upload_sample(
     key = storage.build_sample_key(user_id=user.id, job_id=job.id, filename=filename)
 
     try:
+        # The limit is enforced *inside* put_stream, mid-read, so an oversized
+        # upload never gets fully buffered or written to storage.
         stored = storage.put_stream(
             key=key,
             stream=stream,
             content_type=content_type or "application/octet-stream",
+            max_bytes=settings.MAX_UPLOAD_BYTES,
         )
+    except FileTooLarge as exc:
+        msg = f"Upload exceeds the maximum of {settings.MAX_UPLOAD_BYTES} bytes"
+        raise SampleTooLarge(msg) from exc
     except ValueError as exc:
         # put_stream refuses zero-byte uploads.
         raise EmptySample("Uploaded file was empty") from exc
-
-    settings = get_settings()
-    if stored.size_bytes > settings.MAX_UPLOAD_BYTES:
-        # Clean up the too-large object we just wrote.
-        storage.delete(key)
-        msg = (
-            f"Upload is {stored.size_bytes} bytes, max is "
-            f"{settings.MAX_UPLOAD_BYTES}"
-        )
-        raise SampleTooLarge(msg)
 
     sample = Sample(
         job_id=job.id,

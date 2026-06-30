@@ -1,9 +1,11 @@
 """Authentication routes — /auth/signup, /auth/login, /auth/refresh, /auth/logout, /auth/me."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.api.deps import CurrentUser, SessionDep, client_fingerprint
+from app.api.ratelimit import rate_limiter
+from app.core.config import get_settings
 from app.schemas.auth import (
     LoginRequest,
     LogoutRequest,
@@ -17,12 +19,20 @@ from app.services import auth as auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# IP rate limit on the credential endpoints to blunt brute force / stuffing.
+_auth_rate_limit = rate_limiter(
+    name="auth",
+    limit=get_settings().RATE_LIMIT_AUTH_PER_MINUTE,
+    window_seconds=60,
+)
+
 
 @router.post(
     "/signup",
     response_model=TokenPair,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new account",
+    dependencies=[Depends(_auth_rate_limit)],
 )
 async def signup(
     payload: SignupRequest,
@@ -50,6 +60,7 @@ async def signup(
     "/login",
     response_model=TokenPair,
     summary="Exchange email + password for a token pair",
+    dependencies=[Depends(_auth_rate_limit)],
 )
 async def login(
     payload: LoginRequest,

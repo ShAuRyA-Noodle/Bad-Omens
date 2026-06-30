@@ -7,6 +7,7 @@ tokens are opaque random strings whose SHA256 digest is stored in
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -56,6 +57,20 @@ def verify_password(password: str, hashed: str) -> bool:
 def needs_rehash(hashed: str) -> bool:
     """True if ``hashed`` was produced with outdated parameters."""
     return _hasher.check_needs_rehash(hashed)
+
+
+# Pre-computed argon2id hash used purely to equalize login timing when an
+# email does not exist. Without this, "no such user" returns instantly while
+# "wrong password" pays the argon2 cost — a timing oracle that lets an attacker
+# enumerate registered emails. Computed once at import.
+_DUMMY_HASH = _hasher.hash("relict-login-timing-equalizer")  # noqa: S106 — not a credential
+
+
+def dummy_verify() -> None:
+    """Run a throwaway argon2 verify so a missing-user login costs the same
+    wall-clock time as a real password check."""
+    with contextlib.suppress(VerifyMismatchError, VerificationError, InvalidHashError):
+        _hasher.verify(_DUMMY_HASH, "not-the-password")
 
 
 # ─── JWT access tokens ─────────────────────────────────────────────────
@@ -133,6 +148,7 @@ __all__ = [
     "create_access_token",
     "create_refresh_token",
     "decode_access_token",
+    "dummy_verify",
     "hash_password",
     "hash_refresh_token",
     "needs_rehash",

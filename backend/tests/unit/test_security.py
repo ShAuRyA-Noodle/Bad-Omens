@@ -56,7 +56,9 @@ class TestAccessToken:
         with pytest.raises(jwt.InvalidSignatureError):
             jwt.decode(
                 token,
-                "definitely-not-the-real-secret",
+                # >=32 bytes so PyJWT's InsecureKeyLengthWarning (treated as an
+                # error by our filterwarnings) doesn't mask the real assertion.
+                "definitely-not-the-real-secret-but-long-enough",
                 algorithms=[settings.JWT_ALGORITHM],
             )
 

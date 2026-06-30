@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import hashlib
 import io
+import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING, BinaryIO, cast
 
 from minio import Minio
 from minio.error import S3Error
@@ -37,6 +38,10 @@ class StoredObject:
     sha256: str
     size_bytes: int
     content_type: str
+
+
+class FileTooLarge(Exception):
+    """Raised when an upload stream exceeds the configured byte limit."""
 
 
 class Storage:
@@ -103,36 +108,46 @@ class Storage:
         stream: BinaryIO,
         content_type: str = "application/octet-stream",
         chunk_size: int = 8 * 1024 * 1024,
+        max_bytes: int | None = None,
     ) -> StoredObject:
-        """Upload an arbitrarily large stream, computing SHA256 as it flows.
+        """Upload a stream, computing SHA256 as it flows.
 
-        Reads the input into a temp buffer once to compute the digest and
-        total length (MinIO needs to know the size for non-multipart
-        uploads). For very large files (> 5 GiB) we'll switch to the
-        multipart API in Phase 2.
+        Spools to a temporary file (kept in memory up to a small threshold,
+        then on disk) so peak RAM stays bounded regardless of upload size —
+        the previous version read the whole file into an unbounded BytesIO,
+        which let a large upload exhaust memory before any size check ran.
+
+        ``max_bytes`` is enforced *during* the read: an oversized stream is
+        rejected the moment it crosses the limit (before it is fully consumed
+        and before anything is written to object storage), raising
+        :class:`FileTooLarge`.
         """
         hasher = hashlib.sha256()
-        buffer = io.BytesIO()
-        while True:
-            chunk = stream.read(chunk_size)
-            if not chunk:
-                break
-            hasher.update(chunk)
-            buffer.write(chunk)
+        size = 0
+        with tempfile.SpooledTemporaryFile(max_size=16 * 1024 * 1024) as buffer:
+            while True:
+                chunk = stream.read(chunk_size)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if max_bytes is not None and size > max_bytes:
+                    msg = f"Upload exceeds the maximum of {max_bytes} bytes"
+                    raise FileTooLarge(msg)
+                hasher.update(chunk)
+                buffer.write(chunk)
 
-        size = buffer.tell()
-        if size == 0:
-            msg = "Refusing to store an empty object"
-            raise ValueError(msg)
+            if size == 0:
+                msg = "Refusing to store an empty object"
+                raise ValueError(msg)
 
-        buffer.seek(0)
-        self._client.put_object(
-            self.bucket,
-            key,
-            buffer,
-            length=size,
-            content_type=content_type,
-        )
+            buffer.seek(0)
+            self._client.put_object(
+                self.bucket,
+                key,
+                cast("BinaryIO", buffer),  # SpooledTemporaryFile satisfies the IO protocol
+                length=size,
+                content_type=content_type,
+            )
         return StoredObject(
             key=key,
             sha256=hasher.hexdigest(),

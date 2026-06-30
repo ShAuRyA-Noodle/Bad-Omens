@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    dummy_verify,
     hash_password,
     hash_refresh_token,
     verify_password,
@@ -92,9 +93,13 @@ async def login(
 ) -> tuple[User, TokenPair]:
     email = email.strip().lower()
     user = await session.scalar(select(User).where(User.email == email))
-    if user is None or not verify_password(password, user.password_hash):
-        # Deliberately the same error for both "no such user" and "wrong
-        # password" to avoid leaking existence.
+    if user is None:
+        # Pay the same argon2 cost as a real verify so timing can't reveal
+        # whether the email exists, then return the identical error.
+        dummy_verify()
+        raise InvalidCredentials()
+    if not verify_password(password, user.password_hash):
+        # Same error as "no such user" to avoid leaking existence.
         raise InvalidCredentials()
 
     if not user.is_active:

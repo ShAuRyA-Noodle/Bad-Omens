@@ -119,6 +119,24 @@ def create_app() -> FastAPI:
         finally:
             clear_request_context()
 
+    # ─── Security headers ──────────────────────────────────────────────
+    @app.middleware("http")
+    async def security_headers_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        # HSTS only in production (TLS terminates at the edge). No CSP is set
+        # here: the only HTML this API serves is Swagger UI at /docs, which
+        # loads assets from a CDN, so a strict CSP would break it. The frontend
+        # (separate origin) carries its own CSP.
+        if settings.ENVIRONMENT == "production":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=63072000; includeSubDomains"
+            )
+        return response
+
     # ─── Exception handlers ────────────────────────────────────────────
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(

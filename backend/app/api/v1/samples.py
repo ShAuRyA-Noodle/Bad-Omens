@@ -4,9 +4,10 @@ from __future__ import annotations
 import uuid  # noqa: TC003 — FastAPI uses this for path param introspection
 from datetime import timedelta
 
-from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 
 from app.api.deps import CurrentUser, SessionDep
+from app.core.config import get_settings
 from app.schemas.samples import SamplePublic, SampleUploadResponse
 from app.services import samples as samples_service
 from app.services.storage import get_storage
@@ -21,7 +22,8 @@ router = APIRouter(prefix="/samples", tags=["samples"])
     summary="Upload a FASTQ / FASTA file and create a queued job",
 )
 async def upload_sample(
-    file: UploadFile,  # pylint: disable=unused-argument
+    request: Request,
+    file: UploadFile,
     user: CurrentUser,
     session: SessionDep,
 ) -> SampleUploadResponse:
@@ -30,6 +32,22 @@ async def upload_sample(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Upload must include a filename",
         )
+
+    # Cheap early reject: refuse an obviously-oversized request by its declared
+    # Content-Length before reading the body at all. The authoritative limit is
+    # still enforced mid-stream in the service (the header can be spoofed).
+    max_upload = get_settings().MAX_UPLOAD_BYTES
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared = int(content_length)
+        except ValueError:
+            declared = 0
+        if declared > max_upload + (1 << 20):  # 1 MiB slack for multipart overhead
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Upload too large (declared {declared} bytes, max {max_upload})",
+            )
 
     try:
         _job, sample, _stored = await samples_service.upload_sample(
@@ -52,6 +70,11 @@ async def upload_sample(
     except samples_service.SampleTooLarge as exc:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=str(exc),
+        ) from exc
+    except samples_service.TooManyActiveJobs as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=str(exc),
         ) from exc
 
