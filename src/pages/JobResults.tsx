@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { IntegrityMatrix } from "@/components/IntegrityMatrix";
 import {
   getJobSummary,
   getJobASVs,
@@ -90,6 +91,10 @@ export default function JobResults() {
             </Badge>
           )}
         </div>
+
+        {/* Flagship: the Ecosystem Integrity Index grade matrix. Self-hides
+            for in-progress jobs or jobs that predate the EII. */}
+        <IntegrityMatrix jobId={jobId} enabled={job?.status === "succeeded"} />
 
         {job?.status !== "succeeded" && (
           <Card className="p-8 text-center">

@@ -175,6 +175,24 @@ export interface JobResultsSummary {
   amplicon: string;
 }
 
+export interface EIIComponent {
+  key: string;
+  name: string;
+  weight: number;
+  available: boolean;
+  value: number | null;
+  detail: string;
+}
+
+export interface IntegrityIndex {
+  job_id: string;
+  version: string;
+  score: number | null;
+  grade: string | null;
+  assessed_weight: number;
+  components: EIIComponent[];
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────
 
 export async function signup(email: string, password: string): Promise<TokenPair> {
@@ -259,6 +277,10 @@ export async function getJobConservation(jobId: string): Promise<ConservationSum
 
 export async function getJobProvenance(jobId: string): Promise<ProvenanceManifest> {
   return apiFetch<ProvenanceManifest>(`/jobs/${jobId}/provenance`);
+}
+
+export async function getJobIntegrity(jobId: string): Promise<IntegrityIndex> {
+  return apiFetch<IntegrityIndex>(`/jobs/${jobId}/integrity`);
 }
 
 // ─── Exports ──────────────────────────────────────────────────────
