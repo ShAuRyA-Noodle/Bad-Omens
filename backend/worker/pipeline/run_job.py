@@ -248,9 +248,13 @@ def run_job(job_id: str) -> dict[str, str]:
                     conservation_result = conservation_stage.run(workspace, taxonomy_tsv, logger=log)
                     stage_results.append(conservation_result.to_dict())
                     threatened = conservation_result.metrics.get("threatened_count", 0)
+                    failed = conservation_result.metrics.get("lookup_failed_count", 0)
                     msg = f"Conservation done — {conservation_result.metrics.get('species_with_iucn', 0)} species checked"
                     if threatened > 0:
                         msg += f", {threatened} threatened"
+                    if failed > 0:
+                        # Never let a degraded run read as a clean 'nothing threatened'.
+                        msg += f" — ⚠ {failed} lookup(s) failed, results may be incomplete"
                     _emit(uid, "stage.completed", msg, stage="conservation", progress=0.78)
 
             # ─── Stage 5: Diversity metrics ───────────────────────────

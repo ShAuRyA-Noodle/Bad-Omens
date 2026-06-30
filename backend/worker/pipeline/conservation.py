@@ -144,6 +144,13 @@ def run(
             records.append(record)
             time.sleep(0.2)
 
+        # Fail loud, never silent: a lookup that errored (GBIF/IUCN down,
+        # rate-limited, 5xx) is NOT the same as "assessed and not threatened".
+        # Surfacing lookup_failed_count + api_degraded lets the API/UI refuse to
+        # present a 0-threatened result as authoritative when some lookups never
+        # completed — the exact false-negative that must never reach a forest
+        # department.
+        lookup_failed_count = sum(1 for r in records if r.error)
         result_data = {
             "skipped": False,
             "species_queried": len(species_list),
@@ -152,6 +159,8 @@ def run(
             "threatened_count": sum(
                 1 for r in records if r.iucn_category in ("VU", "EN", "CR", "EW", "EX")
             ),
+            "lookup_failed_count": lookup_failed_count,
+            "api_degraded": lookup_failed_count > 0,
             "records": [r.to_dict() for r in records],
         }
 
@@ -164,6 +173,7 @@ def run(
             species_with_gbif=result_data["species_with_gbif"],
             species_with_iucn=result_data["species_with_iucn"],
             threatened=result_data["threatened_count"],
+            lookup_failed=result_data["lookup_failed_count"],
             runtime=round(timer.elapsed, 2),
         )
 
@@ -179,6 +189,8 @@ def run(
             "species_with_gbif": result_data["species_with_gbif"],
             "species_with_iucn": result_data["species_with_iucn"],
             "threatened_count": result_data["threatened_count"],
+            "lookup_failed_count": result_data["lookup_failed_count"],
+            "api_degraded": result_data["api_degraded"],
         },
     )
 
