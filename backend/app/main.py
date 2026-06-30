@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
+from app.api import public
 from app.api.v1 import auth, exports, health, jobs, results, samples, ws
 from app.core.config import get_settings
 from app.core.logging import (
@@ -150,6 +151,9 @@ def create_app() -> FastAPI:
     # and browser WebSocket clients don't need to know the v1 prefix.
     app.include_router(health.router)
     app.include_router(ws.router)
+    # Public provenance verification (/public-key, /provenance/verify) — no
+    # auth, no v1 prefix, so anyone can verify a manifest's signature.
+    app.include_router(public.router)
 
     # REST resources are namespaced under /api/v1/…
     app.include_router(auth.router, prefix=settings.API_V1_PREFIX)

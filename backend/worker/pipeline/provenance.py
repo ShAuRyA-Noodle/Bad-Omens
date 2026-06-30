@@ -1,20 +1,24 @@
-"""Stage 8: Signed provenance manifest.
+"""Stage 8: Ed25519-signed provenance manifest.
 
-Every pipeline run produces a JSON manifest that records exactly how
-the result was produced — input file hashes, tool versions, reference
-database versions, all parameters, output file hashes, and a
-cryptographic signature so the manifest itself can be verified.
+Every pipeline run produces a JSON manifest recording exactly how the result
+was produced — input file hashes, tool versions, reference-database hashes,
+all parameters, output file hashes — and a real **Ed25519 signature** over
+the manifest's canonical (deterministic) content.
 
-This is what makes Relict results **reproducible and auditable**:
+This is what makes Relict results reproducible and auditable:
+
 - Attach the manifest to a paper as supplementary material.
-- Re-run the pipeline with identical inputs and verify you get the
-  same ``manifest_sha256``.
-- Verify the ed25519 signature against the public key at ``/public-key``
-  to confirm the manifest wasn't tampered with.
+- Re-run the pipeline with identical inputs and verify you get the same
+  ``manifest_sha256`` (the hash covers only deterministic content — not
+  wall-clock timestamps or runtimes; see :mod:`app.core.manifest`).
+- Verify the Ed25519 signature against the public key served at
+  ``GET /public-key`` (or the copy embedded in the manifest) to confirm the
+  manifest was produced by this server and has not been tampered with.
 
-The ed25519 key pair is generated on first startup and stored in the
-database. The private key never leaves the server; the public key is
-served at a public endpoint so anyone can verify.
+The keypair is generated on first use and stored in the ``signing_keys``
+table. The private key never leaves the server; the public key is served at
+a public endpoint and embedded in every manifest so anyone can verify offline
+(see ``backend/scripts/verify_manifest.py``).
 """
 from __future__ import annotations
 
@@ -24,8 +28,25 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.core import signing as crypto
+from app.core.manifest import (
+    canonical_bytes,
+    compute_manifest_hash,
+    sha256_file,
+    sha256_file_cached,
+)
 from worker import PIPELINE_VERSION, TOOL_VERSIONS
 from worker.pipeline import StageResult, StageTimer, ensure_stage_dir
+
+# Re-exported so callers can ``provenance_stage.sha256_file(...)`` without
+# reaching into app.core directly.
+__all__ = [
+    "compute_manifest_hash",
+    "generate_manifest",
+    "run",
+    "sha256_file",
+    "sha256_file_cached",
+]
 
 
 def generate_manifest(
@@ -37,13 +58,13 @@ def generate_manifest(
     parameters: dict[str, Any],
     output_files: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build the provenance manifest dict.
+    """Build the provenance manifest dict (content only — unsigned).
 
-    This is a pure function — no I/O, no side effects. The caller
-    is responsible for persisting the manifest and computing the
-    signature.
+    Pure function: no I/O, no signing. ``timestamp_utc`` is informational and
+    is intentionally excluded from the canonical hash so the manifest stays
+    reproducible across runs (see :mod:`app.core.manifest`).
     """
-    manifest: dict[str, Any] = {
+    return {
         "schema_version": "1.0",
         "job_id": job_id,
         "timestamp_utc": datetime.now(tz=UTC).isoformat(),
@@ -59,34 +80,6 @@ def generate_manifest(
         "outputs": output_files or [],
     }
 
-    manifest_json = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
-    manifest["manifest_sha256"] = hashlib.sha256(manifest_json.encode()).hexdigest()
-
-    return manifest
-
-
-def compute_manifest_hash(manifest: dict[str, Any]) -> str:
-    """Compute the SHA256 of the manifest for signing.
-
-    Removes the ``manifest_sha256`` and ``signature`` fields before
-    hashing so the hash is stable.
-    """
-    clean = {k: v for k, v in manifest.items() if k not in ("manifest_sha256", "signature")}
-    canonical = json.dumps(clean, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode()).hexdigest()
-
-
-def sha256_file(path: Path) -> str:
-    """Compute SHA256 of a file."""
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while True:
-            chunk = f.read(8 * 1024 * 1024)
-            if not chunk:
-                break
-            h.update(chunk)
-    return h.hexdigest()
-
 
 def run(
     workspace: Path,
@@ -96,14 +89,22 @@ def run(
     stage_results: list[dict[str, Any]],
     reference_dbs: list[dict[str, Any]],
     parameters: dict[str, Any],
+    output_files: list[dict[str, Any]] | None = None,
+    signing_private_key: bytes | None = None,
     logger: Any = None,
 ) -> StageResult:
-    """Generate the provenance manifest and write it to the workspace."""
+    """Generate, sign, and write the provenance manifest.
+
+    ``signing_private_key`` is the raw 32-byte Ed25519 private key from the
+    ``signing_keys`` table. When provided, the manifest carries a real
+    signature and the corresponding public key. It is only ``None`` in unit
+    tests that exercise the unsigned path; the worker always supplies a key.
+    """
     stage_dir = ensure_stage_dir(workspace, "provenance")
     manifest_path = stage_dir / "provenance.json"
 
     if logger:
-        logger.info("provenance.started")
+        logger.info("provenance.started", signed=signing_private_key is not None)
 
     with StageTimer() as timer:
         manifest = generate_manifest(
@@ -112,18 +113,36 @@ def run(
             stage_results=stage_results,
             reference_dbs=reference_dbs,
             parameters=parameters,
+            output_files=output_files,
         )
 
-        manifest_hash = compute_manifest_hash(manifest)
+        # Hash + sign the canonical (deterministic) content, not the whole
+        # dict — so wall-clock fields never enter the signed payload.
+        canonical = canonical_bytes(manifest)
+        manifest_hash = hashlib.sha256(canonical).hexdigest()
         manifest["manifest_sha256"] = manifest_hash
-        manifest["signature"] = f"sha256:{manifest_hash}"
 
+        if signing_private_key is not None:
+            manifest["signature"] = crypto.sign(signing_private_key, canonical)
+            manifest["public_key"] = {
+                "algorithm": "ed25519",
+                "key_b64": crypto.public_key_b64(
+                    crypto.public_from_private(signing_private_key)
+                ),
+            }
+        else:
+            # Never relabel the hash as a signature. Unsigned means unsigned.
+            manifest["signature"] = None
+            manifest["public_key"] = None
+
+        manifest["signed_at"] = datetime.now(tz=UTC).isoformat()
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
 
     if logger:
         logger.info(
             "provenance.completed",
             manifest_sha256=manifest_hash[:16],
+            signed=signing_private_key is not None,
             runtime=round(timer.elapsed, 3),
         )
 
@@ -136,6 +155,8 @@ def run(
         output_files=[str(manifest_path)],
         metrics={
             "manifest_sha256": manifest_hash,
+            "signature": manifest["signature"],
+            "signed": signing_private_key is not None,
             "schema_version": "1.0",
         },
     )

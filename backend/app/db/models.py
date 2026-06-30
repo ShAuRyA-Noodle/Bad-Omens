@@ -32,9 +32,11 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.dialects.postgresql import JSONB
@@ -362,11 +364,47 @@ class Provenance(UUIDPrimaryKey, Timestamped, Base):
     )
     schema_version: Mapped[str] = mapped_column(String(16), nullable=False)
     manifest: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    # NOT unique: two reproducible runs with identical inputs are *supposed*
+    # to produce the same manifest_sha256. A unique constraint here would make
+    # the documented byte-reproducibility guarantee crash the second insert.
+    # Indexed for lookup/verification instead.
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     signature: Mapped[str] = mapped_column(Text, nullable=False)
     signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     job: Mapped[Job] = relationship("Job", back_populates="provenance")
+
+
+# ─── Signing key ────────────────────────────────────────────────────────
+
+
+class SigningKey(UUIDPrimaryKey, Timestamped, Base):
+    """The server's Ed25519 keypair for signing provenance manifests.
+
+    Generated once on first use and stored as a singleton (a partial unique
+    index enforces at most one ``is_active`` row). The private key never leaves
+    the server; the public key is served at ``GET /public-key`` and embedded in
+    every manifest so any third party can verify a result offline.
+
+    ``is_active`` allows future key rotation: a rotated-out key stays in the
+    table (is_active=false) so manifests it signed remain verifiable.
+    """
+
+    __tablename__ = "signing_keys"
+
+    algorithm: Mapped[str] = mapped_column(String(32), nullable=False, default="ed25519")
+    private_key: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    public_key: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    __table_args__ = (
+        Index(
+            "uq_signing_keys_active",
+            "is_active",
+            unique=True,
+            postgresql_where=text("is_active"),
+        ),
+    )
 
 
 __all__ = [
@@ -379,6 +417,7 @@ __all__ = [
     "Provenance",
     "RefreshSession",
     "Sample",
+    "SigningKey",
     "Taxon",
     "User",
     "UserRole",

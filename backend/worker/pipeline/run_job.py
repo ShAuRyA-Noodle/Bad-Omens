@@ -35,6 +35,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.db.models import ASV, ConservationCache, DiversityMetric, Job, JobStatus, Sample, Taxon
 from app.services.queue import publish_job_event_sync
+from app.services.signing import get_or_create_signing_key
 from worker import PIPELINE_VERSION, TOOL_VERSIONS
 from worker.pipeline import StageError
 from worker.pipeline import conservation as conservation_stage
@@ -281,15 +282,45 @@ def run_job(job_id: str) -> dict[str, str]:
             job.parameter_hash = hashlib.sha256(param_str.encode()).hexdigest()
 
             # ─── Stage 7: Provenance manifest ─────────────────────────
-            _emit(uid, "stage.started", "Generating provenance manifest", stage="provenance", progress=0.96)
+            _emit(uid, "stage.started", "Generating signed provenance manifest", stage="provenance", progress=0.96)
+
+            # Reference DB hash — cached in a sidecar so multi-GB DBs are
+            # hashed once, not on every run. Recorded for every DB regardless
+            # of size (no more "skipped-large-file" placeholder).
             ref_db_info = []
             ref_db_path = _detect_reference_db(job.amplicon.value if job.amplicon else "16S_V4")
             if ref_db_path and ref_db_path.exists():
                 ref_db_info.append({
                     "name": ref_db_path.name,
                     "path": str(ref_db_path),
-                    "sha256": provenance_stage.sha256_file(ref_db_path) if ref_db_path.stat().st_size < 100_000_000 else "skipped-large-file",
+                    "sha256": provenance_stage.sha256_file_cached(ref_db_path),
                 })
+
+            # Hash every real output file produced by the upstream stages so
+            # the manifest records what was actually generated (deterministic
+            # given identical inputs). The provenance stage itself has not run
+            # yet, so its own output is not included.
+            output_files_manifest: list[dict[str, Any]] = []
+            seen_outputs: set[str] = set()
+            for sr in stage_results:
+                for out in sr.get("output_files", []):
+                    op = Path(out)
+                    key = str(op)
+                    if key in seen_outputs or not op.exists():
+                        continue
+                    seen_outputs.add(key)
+                    try:
+                        output_files_manifest.append({
+                            "filename": op.name,
+                            "sha256": provenance_stage.sha256_file(op),
+                            "size_bytes": op.stat().st_size,
+                        })
+                    except OSError:
+                        continue
+
+            # Mint (or reuse) the server's Ed25519 signing key and sign the
+            # canonical manifest content for real.
+            signing_key = get_or_create_signing_key(session)
 
             prov_result = provenance_stage.run(
                 workspace,
@@ -302,11 +333,14 @@ def run_job(job_id: str) -> dict[str, str]:
                 stage_results=stage_results,
                 reference_dbs=ref_db_info,
                 parameters=pipeline_params,
+                output_files=output_files_manifest,
+                signing_private_key=signing_key.private_key,
                 logger=log,
             )
             stage_results.append(prov_result.to_dict())
 
             manifest_sha = prov_result.metrics.get("manifest_sha256", "")
+            signature = prov_result.metrics.get("signature") or ""
             manifest_path = Path(prov_result.output_files[0]) if prov_result.output_files else None
             manifest_data = {}
             if manifest_path and manifest_path.exists():
@@ -318,7 +352,7 @@ def run_job(job_id: str) -> dict[str, str]:
                 schema_version="1.0",
                 manifest=manifest_data,
                 manifest_sha256=manifest_sha,
-                signature=manifest_data.get("signature", f"sha256:{manifest_sha}"),
+                signature=signature,
                 signed_at=datetime.now(tz=UTC),
             )
             session.add(prov_row)
