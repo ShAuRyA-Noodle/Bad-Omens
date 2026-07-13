@@ -10,7 +10,6 @@ import { BioNetworkBackground } from "@/components/BioNetworkBackground";
 
 import Index from "./pages/Index";
 import Demo from "./pages/Demo";
-import Visualize from "./pages/Visualize";
 import Impact from "./pages/Impact";
 import About from "./pages/About";
 import JobResults from "./pages/JobResults";
@@ -41,7 +40,6 @@ const App = () => (
               <Route path="/demo" element={<Demo />} />
               <Route path="/jobs/:jobId" element={<JobResults />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/visualize" element={<Visualize />} />
               <Route path="/impact" element={<Impact />} />
               <Route path="/about" element={<About />} />
               <Route path="*" element={<NotFound />} />
