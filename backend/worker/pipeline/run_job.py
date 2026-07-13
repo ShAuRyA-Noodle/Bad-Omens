@@ -62,6 +62,23 @@ _AMPLICON_KINGDOM: dict[str, str] = {
 }
 
 
+class _JobCancelled(Exception):
+    """Raised when the job was cancelled mid-run so the pipeline aborts cleanly."""
+
+
+def _ensure_not_cancelled(session: Session, uid: uuid.UUID) -> None:
+    """Cooperative cancellation check.
+
+    Re-reads the job status (READ COMMITTED, so a commit from the API's cancel
+    endpoint in another session is visible) and aborts if it is CANCELLED —
+    so the worker never overwrites a cancel with SUCCEEDED.
+    """
+    session.expire_all()
+    status = session.query(Job.status).filter(Job.id == uid).scalar()
+    if status == JobStatus.CANCELLED:
+        raise _JobCancelled
+
+
 def _workspaces_root() -> Path:
     """Resolve WORKSPACES_ROOT and create it if missing.
 
@@ -207,6 +224,7 @@ def run_job(job_id: str) -> dict[str, str]:
         workspace.mkdir(parents=True, exist_ok=True)
 
         try:
+            _ensure_not_cancelled(session, uid)
             # ─── Download sample from MinIO ────────────────────────────
             raw_fastq = workspace / sample.filename
             _emit(uid, "stage.started", "Downloading sample from storage", stage="download")
@@ -291,6 +309,7 @@ def run_job(job_id: str) -> dict[str, str]:
             _emit(uid, "stage.completed", f"Diversity done — Shannon={div_result.metrics.get('shannon', '?')}", stage="diversity", progress=0.85)
 
             # ─── Stage 6: Ordination ──────────────────────────────────
+            _ensure_not_cancelled(session, uid)
             _emit(uid, "stage.started", "Computing UMAP ordination", stage="ordination", progress=0.88)
             ord_result = ordination_stage.run(workspace, asvs_fasta, logger=log)
             stage_results.append(ord_result.to_dict())
@@ -455,10 +474,21 @@ def run_job(job_id: str) -> dict[str, str]:
             _emit(uid, "stage.completed", f"Provenance manifest signed: {manifest_sha[:16]}...", stage="provenance", progress=0.99)
 
             # ─── Mark succeeded ────────────────────────────────────────
+            # Final cancellation check so a cancel that arrived during the run
+            # is honoured instead of being clobbered by SUCCEEDED.
+            _ensure_not_cancelled(session, uid)
             job.status = JobStatus.SUCCEEDED
             job.finished_at = datetime.now(tz=UTC)
             session.commit()
             _emit(uid, "job.succeeded", "Pipeline completed successfully", progress=1.0)
+
+        except _JobCancelled:
+            # Status is already CANCELLED (set by the API); roll back any
+            # uncommitted partial results and don't overwrite it.
+            session.rollback()
+            _emit(uid, "job.cancelled", "Job cancelled")
+            log.info("pipeline.cancelled", job_id=job_id)
+            return {"status": "cancelled", "job_id": job_id}
 
         except StageError as exc:
             _fail_job(session, job, str(exc))
