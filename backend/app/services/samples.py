@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.db.models import Job, JobStatus, Sample, User
+from app.db.models import Amplicon, Job, JobStatus, Sample, User
 from app.services.jobs import enqueue_job
 from app.services.queue import publish_job_event
 from app.services.storage import FileTooLarge, StoredObject, get_storage
@@ -41,7 +41,25 @@ class TooManyActiveJobs(SampleError):
     pass
 
 
+class InvalidAmplicon(SampleError):
+    pass
+
+
 # ─── Validation ─────────────────────────────────────────────────────────
+
+
+def _parse_amplicon(value: str) -> Amplicon:
+    """Validate the caller-supplied marker against the supported set.
+
+    The marker drives reference-DB selection, the GBIF kingdom hint, and the
+    DwC-A target_gene — so an unknown value must be rejected, not silently
+    defaulted to 16S (which is how every non-16S job was mis-aligned before).
+    """
+    try:
+        return Amplicon(value)
+    except ValueError as exc:
+        supported = ", ".join(m.value for m in Amplicon if m is not Amplicon.OTHER)
+        raise InvalidAmplicon(f"Unknown amplicon marker '{value}'. Supported: {supported}") from exc
 
 
 def _check_filename(filename: str) -> None:
@@ -63,6 +81,7 @@ async def upload_sample(
     filename: str,
     stream: BinaryIO,
     content_type: str,
+    amplicon: str,
 ) -> tuple[Job, Sample, StoredObject]:
     """Create a job + sample row and stream the bytes to object storage.
 
@@ -72,6 +91,7 @@ async def upload_sample(
     it until the worker is wired up.
     """
     _check_filename(filename)
+    marker = _parse_amplicon(amplicon)
     settings = get_settings()
 
     # Per-user concurrency cap: one account cannot flood the worker queue.
@@ -91,7 +111,7 @@ async def upload_sample(
         )
         raise TooManyActiveJobs(msg)
 
-    job = Job(user_id=user.id, status=JobStatus.QUEUED)
+    job = Job(user_id=user.id, status=JobStatus.QUEUED, amplicon=marker)
     session.add(job)
     await session.flush()  # populate job.id for the S3 key
 

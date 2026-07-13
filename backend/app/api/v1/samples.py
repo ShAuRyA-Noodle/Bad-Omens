@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid  # noqa: TC003 — FastAPI uses this for path param introspection
 from datetime import timedelta
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Form, HTTPException, Request, UploadFile, status
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import get_settings
@@ -23,9 +23,10 @@ router = APIRouter(prefix="/samples", tags=["samples"])
 )
 async def upload_sample(
     request: Request,
-    file: UploadFile,
     user: CurrentUser,
     session: SessionDep,
+    file: UploadFile,
+    amplicon: str = Form("16S_V4", description="Amplicon marker, e.g. 12S_MiFish, COI_Leray, 16S_V4"),
 ) -> SampleUploadResponse:
     if file.filename is None or file.filename.strip() == "":
         raise HTTPException(
@@ -56,10 +57,16 @@ async def upload_sample(
             filename=file.filename,
             stream=file.file,
             content_type=file.content_type or "application/octet-stream",
+            amplicon=amplicon,
         )
     except samples_service.UnsupportedSampleFormat as exc:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+    except samples_service.InvalidAmplicon as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
     except samples_service.EmptySample as exc:

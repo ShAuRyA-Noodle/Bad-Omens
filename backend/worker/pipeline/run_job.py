@@ -86,15 +86,18 @@ def _detect_reference_db(amplicon: str) -> Path | None:
     stage will raise a clear error).
     """
     references_root = _references_root()
-    silva_dir = references_root / "silva"
-    mitofish_dir = references_root / "mitofish"           # legacy, may not exist
-    midori2_dir = references_root / "midori2"             # legacy, may not exist
+    silva_dir = references_root / "silva"        # 16S / 18S rRNA
+    mitofish_dir = references_root / "mitofish"  # legacy, may not exist
+    midori2_dir = references_root / "midori2"    # legacy, may not exist
     midori2_12s_dir = references_root / "midori2_12s"
     midori2_coi_dir = references_root / "midori2_coi"
+    unite_dir = references_root / "unite"        # ITS (fungi/plants)
+    rbcl_dir = references_root / "rbcl"          # rbcL (plants, curated)
 
-    # Search order per marker: UDB indexes first (fast), then raw FASTA,
-    # then any *.fasta in the marker's folder as a final fallback. This
-    # lets us survive filename drift across MIDORI2 / SILVA releases.
+    # STRICT per-marker mapping. SILVA is a small-subunit rRNA database and is
+    # only valid for 16S/18S; it is NEVER used for COI/12S/ITS2/rbcL. Each
+    # marker resolves only to a database appropriate for that gene. UDB indexes
+    # first (fast), then raw FASTA (tolerating filename drift across releases).
     candidates: dict[str, list[Path]] = {
         "16S_V4": [
             silva_dir / "SILVA_138.1_SSURef_NR99_tax_silva.udb",
@@ -107,14 +110,6 @@ def _detect_reference_db(amplicon: str) -> Path | None:
             silva_dir / "silva_138_99_merged.fasta",
             silva_dir / "SILVA_138.1_SSURef_NR99_tax_silva.fasta",
             *(list(silva_dir.glob("*.fasta")) if silva_dir.exists() else []),
-        ],
-        "rbcL": [
-            silva_dir / "SILVA_138.1_SSURef_NR99_tax_silva.udb",
-            silva_dir / "SILVA_138.1_SSURef_NR99_tax_silva.fasta",
-        ],
-        "ITS2": [
-            silva_dir / "SILVA_138.1_SSURef_NR99_tax_silva.udb",
-            silva_dir / "SILVA_138.1_SSURef_NR99_tax_silva.fasta",
         ],
         "12S_MiFish": [
             midori2_12s_dir / "MIDORI2_UNIQ_NUC_GB269_srRNA_RAW.udb",
@@ -130,21 +125,28 @@ def _detect_reference_db(amplicon: str) -> Path | None:
             *(list(midori2_coi_dir.glob("*CO1*.fasta")) if midori2_coi_dir.exists() else []),
             *(list(midori2_dir.glob("*CO1*.fasta")) if midori2_dir.exists() else []),
         ],
+        "ITS2": [
+            unite_dir / "unite.udb",
+            *(list(unite_dir.glob("*.fasta")) if unite_dir.exists() else []),
+            *(list(unite_dir.glob("*.fa")) if unite_dir.exists() else []),
+        ],
+        "rbcL": [
+            rbcl_dir / "rbcl.udb",
+            *(list(rbcl_dir.glob("*.fasta")) if rbcl_dir.exists() else []),
+            *(list(rbcl_dir.glob("*.fa")) if rbcl_dir.exists() else []),
+        ],
     }
 
-    for path in candidates.get(amplicon, candidates.get("16S_V4", [])):
+    # An unmapped marker (or 'other') returns None so the caller skips taxonomy
+    # with a clear message — it must NEVER fall through to 16S/SILVA. Likewise a
+    # marker whose DB is not downloaded returns None; we never substitute a
+    # categorically wrong database (BIO-05/BIO-10).
+    paths = candidates.get(amplicon)
+    if paths is None:
+        return None
+    for path in paths:
         if path.exists():
             return path
-
-    # Last-resort fallback — if no marker-specific DB resolves, pick the
-    # biggest FASTA anywhere under the references root so the pipeline
-    # can still produce a best-effort taxonomy rather than skipping.
-    for search_dir in [silva_dir, midori2_12s_dir, midori2_coi_dir, midori2_dir, mitofish_dir]:
-        if search_dir.exists():
-            fastas = list(search_dir.glob("*.fasta")) + list(search_dir.glob("*.fa"))
-            if fastas:
-                return max(fastas, key=lambda f: f.stat().st_size)
-
     return None
 
 

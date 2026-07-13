@@ -228,9 +228,19 @@ export function logout() {
 
 // ─── Samples ──────────────────────────────────────────────────────
 
-export async function uploadSample(file: File): Promise<{ sample: SamplePublic; download_url: string }> {
+export const AMPLICON_MARKERS = [
+  { value: "16S_V4", label: "16S V4", note: "bacteria / archaea · SILVA" },
+  { value: "18S_V9", label: "18S V9", note: "eukaryotes · SILVA" },
+  { value: "12S_MiFish", label: "12S MiFish", note: "fish · MIDORI2" },
+  { value: "COI_Leray", label: "COI Leray", note: "invertebrates · MIDORI2" },
+  { value: "ITS2", label: "ITS2", note: "fungi / plants" },
+  { value: "rbcL", label: "rbcL", note: "plants" },
+] as const;
+
+export async function uploadSample(file: File, amplicon: string): Promise<{ sample: SamplePublic; download_url: string }> {
   const form = new FormData();
   form.append("file", file);
+  form.append("amplicon", amplicon);
   const res = await fetch(`${API_V1}/samples/upload`, {
     method: "POST",
     headers: authHeaders(),

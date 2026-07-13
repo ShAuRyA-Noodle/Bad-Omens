@@ -9,6 +9,7 @@ import {
   uploadSample,
   getJob,
   createJobWebSocket,
+  AMPLICON_MARKERS,
 } from "@/lib/api";
 
 export const DemoUpload = () => {
@@ -19,6 +20,7 @@ export const DemoUpload = () => {
   const [stageMessage, setStageMessage] = useState<string>("");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [amplicon, setAmplicon] = useState<string>("16S_V4");
 
   const [authMode, setAuthMode] = useState<"login" | "signup">("signup");
   const [email, setEmail] = useState("");
@@ -110,7 +112,7 @@ export const DemoUpload = () => {
       setStageMessage("Uploading sequence array...");
 
       try {
-        const result = await uploadSample(file);
+        const result = await uploadSample(file, amplicon);
         const jid = result.sample.job_id;
         setJobId(jid);
         setUploadProgress(10);
@@ -127,13 +129,13 @@ export const DemoUpload = () => {
         toast({ title: "Upload failed", description: msg, variant: "destructive" });
       }
     },
-    [toast]
+    [toast, amplicon]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      "application/octet-stream": [".fastq", ".fq", ".fasta", ".fa", ".fna", ".fastq.gz", ".fq.gz"],
+      "application/octet-stream": [".fastq", ".fq", ".fasta", ".fa", ".fna", ".fastq.gz", ".fq.gz", ".fasta.gz", ".fa.gz", ".fna.gz"],
     },
     maxFiles: 1,
     disabled: isProcessing || !isAuthenticated,
@@ -201,6 +203,36 @@ export const DemoUpload = () => {
         <button className="text-xs text-red-500 hover:text-red-400 border border-red-500/30 px-3 py-1 hover:bg-red-500/10 transition-colors uppercase" onClick={logout}>
           DISCONNECT
         </button>
+      </div>
+
+      {/* Amplicon marker — drives reference DB, GBIF kingdom hint, and DwC-A
+          target gene. Choosing the right one is what makes non-16S results
+          correct. */}
+      <div className="border border-white/10 bg-black/60 backdrop-blur-md p-4 hud-bracket">
+        <div className="flex items-center justify-between text-[11px] text-gray-500 mb-3 uppercase tracking-widest">
+          <span>Amplicon Marker</span>
+          <span className="text-gray-600">reference DB</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {AMPLICON_MARKERS.map((m) => {
+            const active = amplicon === m.value;
+            return (
+              <button
+                key={m.value}
+                type="button"
+                disabled={isProcessing}
+                onClick={() => setAmplicon(m.value)}
+                className={cn(
+                  "text-left p-3 border transition-colors min-h-[56px] disabled:opacity-50 disabled:cursor-not-allowed",
+                  active ? "border-primary bg-primary/10 text-primary" : "border-white/15 text-gray-400 hover:border-secondary hover:text-white"
+                )}
+              >
+                <div className="font-bold text-sm uppercase tracking-wide">{m.label}</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">{m.note}</div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div
