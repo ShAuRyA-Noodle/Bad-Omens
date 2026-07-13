@@ -28,6 +28,24 @@ from worker.pipeline import StageError, StageResult, StageTimer, ensure_stage_di
 
 STANDARD_RANKS = ("kingdom", "phylum", "class", "order", "family", "genus", "species")
 
+# Minimum percent identity to *assign* each rank. A single 90%-identity hit
+# should never be reported as a species; the lineage is truncated to the
+# deepest rank the best-hit identity actually supports. Conservative,
+# marker-agnostic defaults (COI/16S species usually need ~97-99%).
+_RANK_MIN_IDENTITY: dict[str, float] = {
+    "kingdom": 70.0,
+    "phylum": 75.0,
+    "class": 80.0,
+    "order": 85.0,
+    "family": 90.0,
+    "genus": 95.0,
+    "species": 97.0,
+}
+
+# Hits within this many identity-percent of the best hit are pooled for the LCA
+# consensus, so a near-tie between two genera collapses to their common family.
+_LCA_BAND = 1.0
+
 
 @dataclass
 class TaxonomyParams:
@@ -73,7 +91,8 @@ def run(
         "--maxaccepts", str(params.max_accepts),
         "--maxrejects", str(params.max_rejects),
         "--threads", str(params.threads),
-        "--top_hits_only",
+        # Return the top N hits (not just the single best) so taxonomy can be
+        # assigned by LCA consensus rather than one arbitrary best hit.
         "--output_no_hits",
         # Search both strands — without this, ASVs in reverse orientation
         # (common when users upload R2-only, or when the amplicon primer
@@ -132,47 +151,82 @@ def run(
     )
 
 
+def _lca_lineage(lineages: list[list[str]]) -> list[str]:
+    """Lowest-common-ancestor: the common rank prefix across all lineages.
+
+    Stops at the first rank where the lineages disagree, so two hits that share
+    a family but differ in genus collapse to the family.
+    """
+    if not lineages:
+        return []
+    lca: list[str] = []
+    for i in range(len(STANDARD_RANKS)):
+        values = {lin[i] for lin in lineages if i < len(lin) and lin[i]}
+        if len(values) == 1 and all(i < len(lin) and lin[i] for lin in lineages):
+            lca.append(next(iter(values)))
+        else:
+            break
+    return lca
+
+
+def _gate_by_identity(lineage: list[str], identity_pct: float) -> list[str]:
+    """Truncate a lineage to the deepest rank the identity supports."""
+    gated: list[str] = []
+    for i, rank in enumerate(STANDARD_RANKS):
+        if i >= len(lineage) or not lineage[i]:
+            break
+        if identity_pct < _RANK_MIN_IDENTITY[rank]:
+            break
+        gated.append(lineage[i])
+    return gated
+
+
 def _parse_blast6_taxonomy(
     blast6: Path, ref_db: Path
 ) -> list[dict[str, Any]]:
-    """Parse vsearch blast6 output and extract taxonomy from the reference.
+    """Parse vsearch blast6 output into LCA-consensus, identity-gated taxonomy.
 
-    The blast6 format columns:
-    0: query  1: target  2: identity  3: alnlen  4: mism  5: opens
-    6: qlo    7: qhi     8: tlo       9: thi     10: evalue  11: bits
-
-    Taxonomy is extracted from the target (subject) header in the
-    reference DB. For SILVA, headers are:
-      ACCESSION.start.end Kingdom;Phylum;Class;Order;Family;Genus;Species
-
-    For MitoFish/MIDORI2, headers vary but generally use ';' as delimiter.
+    blast6 columns: 0 query 1 target 2 identity 3 alnlen … . For each ASV we
+    pool the hits within ``_LCA_BAND`` of the best identity, take their LCA
+    consensus lineage, then truncate it to the deepest rank the best-hit
+    identity supports (``_gate_by_identity``). This replaces reporting a full
+    7-rank species from a single low-identity best hit.
     """
-    hits: dict[str, dict[str, Any]] = {}
+    per_query: dict[str, list[tuple[float, list[str], str]]] = {}
 
     with open(blast6) as f:
         for line in f:
             parts = line.strip().split("\t")
-            if len(parts) < 12:
+            if len(parts) < 2:
                 continue
             query_id = parts[0].split(";")[0]
+            per_query.setdefault(query_id, [])
             target_id = parts[1]
-            identity = float(parts[2])
-
-            if query_id in hits and hits[query_id].get("identity", 0) >= identity:
+            if target_id == "*" or len(parts) < 12:  # no-hit sentinel
                 continue
-
+            identity = float(parts[2])
             lineage = _extract_lineage_from_target(target_id, ref_db)
-            record: dict[str, Any] = {
-                "asv_id": query_id,
-                "target": target_id,
-                "identity": identity,
-            }
+            per_query[query_id].append((identity, lineage, target_id))
+
+    records: list[dict[str, Any]] = []
+    for query_id, hits in per_query.items():
+        record: dict[str, Any] = {"asv_id": query_id, "target": "", "identity": 0.0}
+        for rank in STANDARD_RANKS:
+            record[rank] = ""
+
+        if hits:
+            best_id = max(h[0] for h in hits)
+            band = [h for h in hits if h[0] >= best_id - _LCA_BAND]
+            lca = _lca_lineage([h[1] for h in band])
+            gated = _gate_by_identity(lca, best_id)
+            record["identity"] = best_id
+            record["target"] = max(hits, key=lambda h: h[0])[2]
             for i, rank in enumerate(STANDARD_RANKS):
-                record[rank] = lineage[i] if i < len(lineage) else ""
+                record[rank] = gated[i] if i < len(gated) else ""
 
-            hits[query_id] = record
+        records.append(record)
 
-    return list(hits.values())
+    return records
 
 
 _ref_header_cache: dict[str, dict[str, str]] = {}
