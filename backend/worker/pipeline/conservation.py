@@ -100,9 +100,15 @@ def run(
     workspace: Path,
     taxonomy_tsv: Path,
     params: Any = None,
+    kingdom_hint: str | None = None,
     logger: Any = None,
 ) -> StageResult:
-    """Cross-reference detected taxa against GBIF and IUCN Red List."""
+    """Cross-reference detected taxa against GBIF and IUCN Red List.
+
+    ``kingdom_hint`` (derived from the amplicon marker) constrains the GBIF
+    name match so plant/fungal/bacterial markers don't mis-resolve to animal
+    homonyms — replacing the previous hardcoded ``kingdom=Animalia``.
+    """
     settings = get_settings()
     iucn_token = (
         settings.IUCN_REDLIST_TOKEN.get_secret_value()
@@ -140,7 +146,9 @@ def run(
 
         records: list[ConservationRecord] = []
         for species_name in species_list:
-            record = _lookup_species(species_name, iucn_token=iucn_token, logger=logger)
+            record = _lookup_species(
+                species_name, iucn_token=iucn_token, kingdom_hint=kingdom_hint, logger=logger
+            )
             records.append(record)
             time.sleep(0.2)
 
@@ -219,13 +227,14 @@ def _lookup_species(
     species_name: str,
     *,
     iucn_token: str | None,
+    kingdom_hint: str | None = None,
     logger: Any = None,
 ) -> ConservationRecord:
     """Look up a single species against GBIF and IUCN."""
     record = ConservationRecord(species=species_name)
 
     try:
-        _gbif_lookup(record, species_name)
+        _gbif_lookup(record, species_name, kingdom_hint=kingdom_hint)
     except Exception as exc:
         record.error = f"GBIF error: {exc!s}"
         if logger:
@@ -245,13 +254,20 @@ def _lookup_species(
     return record
 
 
-def _gbif_lookup(record: ConservationRecord, species_name: str) -> None:
-    """Query GBIF Species Match + Occurrence count."""
+def _gbif_lookup(
+    record: ConservationRecord, species_name: str, kingdom_hint: str | None = None
+) -> None:
+    """Query GBIF Species Match + Occurrence count.
+
+    When ``kingdom_hint`` is supplied it constrains the match (so e.g. a plant
+    name isn't matched to an animal homonym); if that constrained match fails
+    we retry unconstrained.
+    """
     with httpx.Client(timeout=15.0) as client:
-        match_resp = client.get(
-            GBIF_SPECIES_MATCH_URL,
-            params={"name": species_name, "verbose": "false", "kingdom": "Animalia"},
-        )
+        match_params = {"name": species_name, "verbose": "false"}
+        if kingdom_hint:
+            match_params["kingdom"] = kingdom_hint
+        match_resp = client.get(GBIF_SPECIES_MATCH_URL, params=match_params)
         match_resp.raise_for_status()
         match_data = match_resp.json()
 
@@ -266,7 +282,7 @@ def _gbif_lookup(record: ConservationRecord, species_name: str) -> None:
             )
             occ_resp.raise_for_status()
             record.gbif_occurrence_count = occ_resp.json().get("count", 0)
-        else:
+        elif kingdom_hint:
             with httpx.Client(timeout=15.0) as client2:
                 match_resp2 = client2.get(
                     GBIF_SPECIES_MATCH_URL,

@@ -29,7 +29,7 @@ def _write_taxonomy(tmp_path):
 def test_failed_lookup_is_reported_not_hidden(tmp_path, monkeypatch) -> None:
     tsv = _write_taxonomy(tmp_path)
 
-    def fake_lookup(name: str, *, iucn_token=None, logger=None) -> cons.ConservationRecord:
+    def fake_lookup(name: str, *, iucn_token=None, kingdom_hint=None, logger=None) -> cons.ConservationRecord:
         rec = cons.ConservationRecord(species=name)
         if name == "Tor putitora":
             rec.error = "GBIF error: 503 Service Unavailable"  # lookup genuinely failed
@@ -59,7 +59,7 @@ def test_failed_lookup_is_reported_not_hidden(tmp_path, monkeypatch) -> None:
 def test_clean_run_is_not_flagged_degraded(tmp_path, monkeypatch) -> None:
     tsv = _write_taxonomy(tmp_path)
 
-    def fake_lookup(name: str, *, iucn_token=None, logger=None) -> cons.ConservationRecord:
+    def fake_lookup(name: str, *, iucn_token=None, kingdom_hint=None, logger=None) -> cons.ConservationRecord:
         rec = cons.ConservationRecord(species=name)
         rec.gbif_key = 1
         rec.iucn_category = "EN" if name == "Tor putitora" else "LC"

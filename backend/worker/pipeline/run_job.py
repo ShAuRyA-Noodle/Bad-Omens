@@ -51,6 +51,16 @@ from worker.tool_versions import detect_tool_versions
 
 log = get_logger("worker.pipeline")
 
+# Marker -> GBIF kingdom hint for conservation name matching. 18S is left
+# unmapped (spans many eukaryote kingdoms) so it stays unconstrained.
+_AMPLICON_KINGDOM: dict[str, str] = {
+    "12S_MiFish": "Animalia",
+    "COI_Leray": "Animalia",
+    "16S_V4": "Bacteria",
+    "ITS2": "Fungi",
+    "rbcL": "Plantae",
+}
+
 
 def _workspaces_root() -> Path:
     """Resolve WORKSPACES_ROOT and create it if missing.
@@ -247,7 +257,10 @@ def run_job(job_id: str) -> dict[str, str]:
                         break
                 if taxonomy_tsv and taxonomy_tsv.exists():
                     _emit(uid, "stage.started", "Cross-referencing species against GBIF + IUCN Red List", stage="conservation", progress=0.72)
-                    conservation_result = conservation_stage.run(workspace, taxonomy_tsv, logger=log)
+                    kingdom_hint = _AMPLICON_KINGDOM.get(job.amplicon.value if job.amplicon else "")
+                    conservation_result = conservation_stage.run(
+                        workspace, taxonomy_tsv, kingdom_hint=kingdom_hint, logger=log
+                    )
                     stage_results.append(conservation_result.to_dict())
                     threatened = conservation_result.metrics.get("threatened_count", 0)
                     failed = conservation_result.metrics.get("lookup_failed_count", 0)
