@@ -103,12 +103,12 @@ export const HeroSection = () => {
           </div>
 
           {/* Readout Footer */}
-          <div className="bg-black/80 p-4 font-mono text-xs flex flex-col sm:flex-row justify-between text-gray-500 border-t border-white/10">
-            <div className="flex space-x-8">
-              <span><span className="text-primary">PIPELINE:</span> fastp + vsearch + scikit-bio</span>
-              <span><span className="text-primary">REF_DB:</span> SILVA 138.1 + MIDORI2 GB269</span>
+          <div className="bg-black/80 p-4 font-mono text-xs flex flex-col md:flex-row md:justify-between gap-2 text-gray-400 border-t border-white/10">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-1 sm:gap-x-8 min-w-0">
+              <span className="break-words"><span className="text-primary">PIPELINE:</span> fastp + vsearch + scikit-bio</span>
+              <span className="break-words"><span className="text-primary">REF_DB:</span> SILVA 138.1 + MIDORI2 GB269</span>
             </div>
-            <div className="mt-2 sm:mt-0">
+            <div className="shrink-0">
               [ OPEN SOURCE // MIT ]
             </div>
           </div>

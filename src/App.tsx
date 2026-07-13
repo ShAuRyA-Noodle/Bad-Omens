@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { ReactLenis } from "@studio-freight/react-lenis";
 import CustomCursor from "@/components/CustomCursor";
 import { BioNetworkBackground } from "@/components/BioNetworkBackground";
+import { useHeavyFxEnabled } from "@/hooks/use-heavy-fx";
 
 import Index from "./pages/Index";
 import Demo from "./pages/Demo";
@@ -25,12 +26,18 @@ const queryClient = new QueryClient({
   },
 });
 
-const App = () => (
+const App = () => {
+  // Heavy decorative FX (3D particle background, custom cursor) only mount on
+  // fine-pointer, motion-OK displays — never on touch/mobile or when the user
+  // prefers reduced motion, so phones don't run a full-screen render loop.
+  const heavyFx = useHeavyFxEnabled();
+
+  return (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
       <ReactLenis root options={{ lerp: 0.05, syncTouch: true }}>
-        <BioNetworkBackground />
-        <CustomCursor />
+        {heavyFx && <BioNetworkBackground />}
+        {heavyFx && <CustomCursor />}
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -49,6 +56,7 @@ const App = () => (
       </ReactLenis>
     </ThemeProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;
