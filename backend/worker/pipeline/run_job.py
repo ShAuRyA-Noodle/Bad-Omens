@@ -272,6 +272,18 @@ def run_job(job_id: str) -> dict[str, str]:
                         msg += f" — ⚠ {failed} lookup(s) failed, results may be incomplete"
                     _emit(uid, "stage.completed", msg, stage="conservation", progress=0.78)
 
+                    # Persist a per-job conservation snapshot (tenant-isolated
+                    # and reproducible) so /conservation is served from this,
+                    # not the species-keyed cache shared across all users.
+                    for cf in conservation_result.output_files:
+                        if cf.endswith("conservation.json") and Path(cf).exists():
+                            from app.db.models import ConservationResult
+                            session.add(ConservationResult(
+                                job_id=job.id,
+                                data=json.loads(Path(cf).read_text()),
+                            ))
+                            break
+
             # ─── Stage 5: Diversity metrics ───────────────────────────
             _emit(uid, "stage.started", "Computing diversity metrics", stage="diversity", progress=0.80)
             div_result = diversity_stage.run(workspace, asvs_fasta, logger=log)

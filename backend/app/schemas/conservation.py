@@ -28,4 +28,8 @@ class ConservationSummary(BaseModel):
     species_with_gbif: int
     species_with_iucn: int
     threatened_count: int
+    # Fail-loud signals: when a GBIF/IUCN lookup errored, the panel is degraded
+    # and a 0 threatened_count must not be presented as authoritative.
+    lookup_failed_count: int = 0
+    api_degraded: bool = False
     records: list[ConservationPublic]

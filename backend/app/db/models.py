@@ -207,6 +207,13 @@ class Job(UUIDPrimaryKey, Timestamped, Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    conservation_result: Mapped[ConservationResult | None] = relationship(
+        "ConservationResult",
+        back_populates="job",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Sample(UUIDPrimaryKey, Timestamped, Base):
@@ -447,6 +454,33 @@ class OrdinationResult(UUIDPrimaryKey, Timestamped, Base):
     job: Mapped[Job] = relationship("Job", back_populates="ordination")
 
 
+# ─── Conservation result (per-job snapshot) ─────────────────────────────
+
+
+class ConservationResult(UUIDPrimaryKey, Timestamped, Base):
+    """Per-job conservation cross-reference snapshot.
+
+    The global ``conservation_cache`` is a species-keyed cache shared across
+    all tenants; serving a job's panel from it leaks one user's lookups into
+    another's results and makes the panel diverge from the job's own signed
+    manifest. This table stores the exact records this job produced, so the
+    panel is tenant-isolated and reproducible. ``data`` holds the full
+    conservation stage output (counts + per-species records).
+    """
+
+    __tablename__ = "conservation_results"
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    job: Mapped[Job] = relationship("Job", back_populates="conservation_result")
+
+
 # ─── Signing key ────────────────────────────────────────────────────────
 
 
@@ -483,6 +517,7 @@ __all__ = [
     "ASV",
     "Amplicon",
     "ConservationCache",
+    "ConservationResult",
     "DiversityMetric",
     "IntegrityIndex",
     "Job",

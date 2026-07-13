@@ -17,6 +17,7 @@ from app.api.deps import CurrentUser, SessionDep
 from app.db.models import (
     ASV,
     ConservationCache,
+    ConservationResult,
     DiversityMetric,
     IntegrityIndex,
     Job,
@@ -219,14 +220,48 @@ async def job_conservation(
     """
     job = await _get_succeeded_job(session, job_id, user)
 
-    # Get all species names from the job's ASVs via their taxon assignments
-    stmt = (
-        select(ASV)
-        .where(ASV.job_id == job.id)
-        .options(selectinload(ASV.taxon))
+    # Prefer the tenant-isolated per-job snapshot. Serving from the shared,
+    # species-keyed cache leaked other users' lookups into this panel and let it
+    # diverge from the job's own signed manifest (V-02).
+    snap = await session.scalar(
+        select(ConservationResult).where(ConservationResult.job_id == job.id)
     )
-    asvs = list(await session.scalars(stmt))
+    if snap is not None:
+        data = snap.data
+        records = [
+            ConservationPublic(
+                id=uuid.uuid5(uuid.NAMESPACE_DNS, f"{job.id}:{r.get('species', '')}"),
+                species=str(r.get("species", "")),
+                gbif_key=r.get("gbif_key"),
+                gbif_occurrence_count=r.get("gbif_occurrence_count"),
+                iucn_category=r.get("iucn_category"),
+                iucn_assessment_year=r.get("iucn_assessment_year"),
+                is_invasive=bool(r.get("is_invasive") or False),
+                legal_flags={
+                    "gbif_matched_name": r.get("gbif_matched_name"),
+                    "iucn_category_full": r.get("iucn_category_full"),
+                    "iucn_population_trend": r.get("iucn_population_trend"),
+                    "error": r.get("error"),
+                },
+                fetched_at=snap.created_at,
+            )
+            for r in data.get("records", [])
+        ]
+        return ConservationSummary(
+            job_id=job.id,
+            species_queried=int(data.get("species_queried", len(records))),
+            species_with_gbif=int(data.get("species_with_gbif", 0)),
+            species_with_iucn=int(data.get("species_with_iucn", 0)),
+            threatened_count=int(data.get("threatened_count", 0)),
+            lookup_failed_count=int(data.get("lookup_failed_count", 0)),
+            api_degraded=bool(data.get("api_degraded", False)),
+            records=records,
+        )
 
+    # Fallback for jobs run before per-job snapshots existed: reconstruct from
+    # the shared cache (only for historical jobs; new jobs always snapshot).
+    stmt = select(ASV).where(ASV.job_id == job.id).options(selectinload(ASV.taxon))
+    asvs = list(await session.scalars(stmt))
     species_names: set[str] = set()
     for asv in asvs:
         if asv.taxon:
@@ -236,24 +271,24 @@ async def job_conservation(
                 full = f"{genus} {species}".strip() if species else genus
                 species_names.add(full)
 
-    # Look up cached conservation records
-    records: list[ConservationPublic] = []
+    legacy_records: list[ConservationPublic] = []
     if species_names:
-        stmt_cons = select(ConservationCache).where(
-            ConservationCache.species.in_(species_names)
+        cached = list(
+            await session.scalars(
+                select(ConservationCache).where(ConservationCache.species.in_(species_names))
+            )
         )
-        cached = list(await session.scalars(stmt_cons))
-        records = [ConservationPublic.model_validate(c) for c in cached]
+        legacy_records = [ConservationPublic.model_validate(c) for c in cached]
 
     return ConservationSummary(
         job_id=job.id,
         species_queried=len(species_names),
-        species_with_gbif=sum(1 for r in records if r.gbif_key),
-        species_with_iucn=sum(1 for r in records if r.iucn_category),
+        species_with_gbif=sum(1 for r in legacy_records if r.gbif_key),
+        species_with_iucn=sum(1 for r in legacy_records if r.iucn_category),
         threatened_count=sum(
-            1 for r in records if r.iucn_category in ("VU", "EN", "CR", "EW", "EX")
+            1 for r in legacy_records if r.iucn_category in ("VU", "EN", "CR", "EW", "EX")
         ),
-        records=records,
+        records=legacy_records,
     )
 
 

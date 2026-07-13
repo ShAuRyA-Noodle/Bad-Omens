@@ -150,6 +150,8 @@ export interface ConservationSummary {
   species_with_gbif: number;
   species_with_iucn: number;
   threatened_count: number;
+  lookup_failed_count: number;
+  api_degraded: boolean;
   records: ConservationRecord[];
 }
 

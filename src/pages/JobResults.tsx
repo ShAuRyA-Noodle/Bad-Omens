@@ -235,6 +235,12 @@ function ConservationTab({ data }: { data: ConservationSummary }) {
         <MetricCard label="IUCN Assessed" value={data.species_with_iucn} />
         <MetricCard label="Threatened" value={data.threatened_count} />
       </div>
+      {data.api_degraded && (
+        <div className="border border-yellow-500/40 bg-yellow-500/5 p-3 text-xs text-yellow-500/90 flex items-start gap-2">
+          <span className="shrink-0">⚠</span>
+          <span>{data.lookup_failed_count} lookup(s) failed (GBIF/IUCN). Conservation results may be incomplete — the &quot;Threatened&quot; count is not authoritative for this run.</span>
+        </div>
+      )}
       <Panel label="Per-Species Conservation Status">
         {data.records.length === 0 ? (
           <p className="text-sm text-gray-400">No species-level assignments to cross-reference.</p>
