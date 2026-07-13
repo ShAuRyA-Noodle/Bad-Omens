@@ -22,7 +22,7 @@
 - **Real conservation status** — every detected species cross-referenced against GBIF (occurrence data) and the IUCN Red List (EN/VU/CR/LC categories)
 - **Real diversity metrics** — Shannon, Simpson, Chao1, richness, evenness computed by scikit-bio
 - **Signed provenance manifests** — input hashes, tool versions, DB versions, output hashes, Ed25519 signature (verifiable at `/public-key`)
-- **GBIF-ready exports** — Darwin Core Archive, CSV, BIOM 2.1.0 format
+- **GBIF-ready exports** — Darwin Core Archive, CSV, and BIOM (JSON)
 
 Six amplicon markers supported: 16S V4, 12S MiFish, COI Leray, 18S V9, rbcL, ITS2.
 

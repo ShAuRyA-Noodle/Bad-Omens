@@ -102,9 +102,11 @@ itself.
   - `POST /samples/upload` — multipart, streams to MinIO
   - `POST /jobs` — enqueue a job for one or more uploaded samples
   - `GET /jobs/{id}` — job status + stage breakdown
-  - `GET /jobs/{id}/asvs`, `/taxonomy`, `/diversity`, `/ordination`,
-    `/conservation`, `/provenance`, `/report.pdf`, `/export/biom`,
-    `/export/qiime2`, `/export/dwca`
+  - `GET /jobs/{id}/asvs`, `/diversity`, `/ordination`, `/conservation`,
+    `/integrity` (Ecosystem Integrity Index), `/provenance`,
+    `/export/report` (HTML), `/export/biom` (JSON), `/export/csv`,
+    `/export/dwca`
+  - `POST /provenance/verify` — verify a manifest's Ed25519 signature
   - `DELETE /jobs/{id}` — cancel / delete
   - `WS /ws/jobs/{id}` — live progress
   - `GET /public-key` — ed25519 public key for provenance verification
@@ -259,7 +261,7 @@ GitHub Actions workflows:
   - Repo-wide: `grep -rn 'mock\|TODO.*backend\|FIXME' src/ backend/` must
     be empty
   - Benchmark smoke test on a tiny real public dataset
-- **`release.yml`** on tag `v*`:
+- **`release.yml`** (planned — not yet implemented) on tag `v*`:
   - Build + push Docker images for API and worker
   - Create a GitHub release with auto-generated changelog
   - Trigger Zenodo webhook for a new DOI
