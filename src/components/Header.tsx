@@ -32,6 +32,7 @@ export const Header = () => {
   const navigation = [
     { name: "INIT", href: "/" },
     { name: "EXECUTE_PIPELINE", href: "/demo" },
+    { name: "VERIFY", href: "/verify" },
     { name: "SYSTEM_IMPACT", href: "/impact" },
     { name: "ABOUT_NODE", href: "/about" },
   ];

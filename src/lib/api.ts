@@ -348,6 +348,43 @@ export async function downloadExport(url: string, filename: string) {
   URL.revokeObjectURL(a.href);
 }
 
+// ─── Public provenance verification (no auth, root-mounted) ─────────
+
+export interface PublicKey {
+  algorithm: string;
+  public_key_b64: string;
+  public_key_pem: string;
+}
+
+export interface VerifyResult {
+  verified: boolean;
+  content_hash_ok: boolean;
+  signature_ok: boolean;
+  computed_sha256: string;
+  claimed_sha256: string | null;
+  algorithm: string;
+  detail: string;
+}
+
+export async function getPublicKey(): Promise<PublicKey> {
+  const res = await fetch(`${API_BASE}/public-key`);
+  if (!res.ok) throw new Error(`No public key available (${res.status})`);
+  return res.json();
+}
+
+export async function verifyManifest(manifest: unknown): Promise<VerifyResult> {
+  const res = await fetch(`${API_BASE}/provenance/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ manifest }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.error?.message || body?.detail || `Verification failed (${res.status})`);
+  }
+  return res.json();
+}
+
 // ─── Health ───────────────────────────────────────────────────────
 
 export async function checkHealth(): Promise<{ status: string; version: string }> {

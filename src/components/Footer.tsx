@@ -24,6 +24,7 @@ const footerLinks: Record<string, FooterLink[]> = {
     { name: "MAN_PAGES", href: "/about" },
   ],
   VERIFY: [
+    { name: "VERIFY_MANIFEST", href: "/verify" },
     { name: "PUBLIC_KEY", href: "/public-key", external: true },
   ],
   EXT_DB: [

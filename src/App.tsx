@@ -15,6 +15,7 @@ import Impact from "./pages/Impact";
 import About from "./pages/About";
 import JobResults from "./pages/JobResults";
 import Profile from "./pages/Profile";
+import Verify from "./pages/Verify";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -47,6 +48,7 @@ const App = () => {
               <Route path="/demo" element={<Demo />} />
               <Route path="/jobs/:jobId" element={<JobResults />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/verify" element={<Verify />} />
               <Route path="/impact" element={<Impact />} />
               <Route path="/about" element={<About />} />
               <Route path="*" element={<NotFound />} />

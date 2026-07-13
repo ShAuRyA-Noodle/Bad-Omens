@@ -286,7 +286,9 @@ function ProvenanceTab({ data }: { data: ProvenanceManifest }) {
           <Field label="Signed at" value={new Date(data.signed_at).toLocaleString()} />
         </div>
         <p className="mt-4 text-[11px] text-gray-500 border-t border-white/10 pt-3">
-          Verify this manifest's signature offline against the server's public key at <span className="text-neon-cyan">/public-key</span>.
+          Anyone can{" "}
+          <Link to="/verify" className="text-neon-cyan hover:underline">verify this manifest</Link>{" "}
+          against the server&apos;s Ed25519 public key — no login required.
         </p>
       </Panel>
 
