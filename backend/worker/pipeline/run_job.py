@@ -284,6 +284,22 @@ def run_job(job_id: str) -> dict[str, str]:
             stage_results.append(ord_result.to_dict())
             _emit(uid, "stage.completed", f"Ordination done — {ord_result.metrics.get('n_clusters', '?')} clusters", stage="ordination", progress=0.95)
 
+            # Persist the embedding so it can be retrieved + plotted instead of
+            # discarded with the workspace (it is hashed into the signed manifest).
+            if ord_result.output_files:
+                ord_path = Path(ord_result.output_files[0])
+                if ord_path.exists():
+                    ord_data = json.loads(ord_path.read_text())
+                    if not ord_data.get("skipped") and ord_data.get("points"):
+                        from app.db.models import OrdinationResult
+                        session.add(OrdinationResult(
+                            job_id=job.id,
+                            method="umap-kmer",
+                            n_clusters=int(ord_data.get("n_clusters", 0)),
+                            n_noise=int(ord_data.get("n_noise_points", 0)),
+                            data=ord_data,
+                        ))
+
             # ─── Ecosystem Integrity Index ────────────────────────────
             # Computed from the real diversity + conservation signals and
             # appended to stage_results BEFORE the manifest is generated, so the

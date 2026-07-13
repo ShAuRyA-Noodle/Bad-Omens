@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IntegrityMatrix } from "@/components/IntegrityMatrix";
+import { CompositionMap } from "@/components/CompositionMap";
 import { cn } from "@/lib/utils";
 import {
   getJobSummary,
@@ -157,7 +158,10 @@ export default function JobResults() {
                 ))}
               </TabsList>
 
-              <TabsContent value="overview">{summaryLoading || !summary ? <Loading label="Computing metrics" /> : <OverviewTab summary={summary} />}</TabsContent>
+              <TabsContent value="overview" className="space-y-4">
+                {summaryLoading || !summary ? <Loading label="Computing metrics" /> : <OverviewTab summary={summary} />}
+                <CompositionMap jobId={jobId} enabled={succeeded} />
+              </TabsContent>
               <TabsContent value="asvs">{asvsLoading || !asvs ? <Loading label="Loading ASVs" /> : <ASVsTab asvs={asvs} />}</TabsContent>
               <TabsContent value="conservation">{consLoading || !conservation ? <Loading label="Cross-referencing GBIF/IUCN" /> : <ConservationTab data={conservation} />}</TabsContent>
               <TabsContent value="provenance">{provLoading || !provenance ? <Loading label="Loading manifest" /> : <ProvenanceTab data={provenance} />}</TabsContent>

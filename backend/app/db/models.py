@@ -200,6 +200,13 @@ class Job(UUIDPrimaryKey, Timestamped, Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    ordination: Mapped[OrdinationResult | None] = relationship(
+        "OrdinationResult",
+        back_populates="job",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Sample(UUIDPrimaryKey, Timestamped, Base):
@@ -411,6 +418,35 @@ class IntegrityIndex(UUIDPrimaryKey, Timestamped, Base):
     job: Mapped[Job] = relationship("Job", back_populates="integrity_index")
 
 
+# ─── Ordination ─────────────────────────────────────────────────────────
+
+
+class OrdinationResult(UUIDPrimaryKey, Timestamped, Base):
+    """UMAP k-mer composition map + HDBSCAN clusters for a job's ASVs.
+
+    This is a *within-sample sequence-composition map* (UMAP on each ASV's
+    k-mer frequency profile), NOT a multi-sample community ordination. It is
+    persisted so the computed embedding — which is hashed into the job's signed
+    manifest — can be retrieved and plotted, instead of being discarded with
+    the workspace. ``data`` holds the full stage output (points + params).
+    """
+
+    __tablename__ = "ordination_results"
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    method: Mapped[str] = mapped_column(String(32), nullable=False, default="umap-kmer")
+    n_clusters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    n_noise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    job: Mapped[Job] = relationship("Job", back_populates="ordination")
+
+
 # ─── Signing key ────────────────────────────────────────────────────────
 
 
@@ -451,6 +487,7 @@ __all__ = [
     "IntegrityIndex",
     "Job",
     "JobStatus",
+    "OrdinationResult",
     "Provenance",
     "RefreshSession",
     "Sample",

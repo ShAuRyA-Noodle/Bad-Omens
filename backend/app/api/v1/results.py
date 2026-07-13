@@ -21,6 +21,7 @@ from app.db.models import (
     IntegrityIndex,
     Job,
     JobStatus,
+    OrdinationResult,
     Provenance,
     Sample,
 )
@@ -32,6 +33,7 @@ from app.schemas.results import (
     EIIComponentPublic,
     IntegrityIndexPublic,
     JobResultsSummary,
+    OrdinationPoint,
     OrdinationResponse,
     TaxonPublic,
 )
@@ -158,31 +160,43 @@ async def job_diversity(
 @router.get(
     "/ordination",
     response_model=OrdinationResponse,
-    summary="UMAP 2D coordinates + HDBSCAN cluster labels",
+    summary="ASV composition map (UMAP on k-mer profiles) + HDBSCAN clusters",
 )
 async def job_ordination(
     job_id: uuid.UUID,
     user: CurrentUser,
     session: SessionDep,
 ) -> OrdinationResponse:
-    """Return the ordination data from the job's workspace.
+    """Return the persisted UMAP composition map for this job's ASVs.
 
-    The ordination JSON is stored in MinIO alongside the job's other
-    outputs. For Phase 2 we read it from the workspace before cleanup;
-    in Phase 5 this will be persisted to object storage + the provenance
-    manifest.
-
-    For now, if the job has completed but the ordination wasn't stored
-    persistently yet, we return an empty response.
+    Note: this is a *within-sample* sequence-composition map (UMAP on each
+    ASV's k-mer frequency), not a multi-sample community ordination. The
+    embedding is the exact one hashed into the job's signed manifest.
     """
-    _ = await _get_succeeded_job(session, job_id, user)
+    job = await _get_succeeded_job(session, job_id, user)
 
+    row = await session.scalar(
+        select(OrdinationResult).where(OrdinationResult.job_id == job.id)
+    )
+    if row is None:
+        return OrdinationResponse(
+            n_asvs=0,
+            n_clusters=0,
+            n_noise_points=0,
+            skipped=True,
+            reason="No composition map — UMAP needs at least 3 ASVs.",
+        )
+
+    data = row.data
+    points = [OrdinationPoint(**p) for p in data.get("points", [])]
     return OrdinationResponse(
-        n_asvs=0,
-        n_clusters=0,
-        n_noise_points=0,
-        skipped=True,
-        reason="Ordination data is computed during the pipeline run. Persistent storage lands in Phase 5.",
+        n_asvs=len(points),
+        n_clusters=row.n_clusters,
+        n_noise_points=row.n_noise,
+        skipped=False,
+        points=points,
+        umap_params=data.get("umap_params"),
+        hdbscan_params=data.get("hdbscan_params"),
     )
 
 

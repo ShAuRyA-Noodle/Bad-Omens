@@ -293,6 +293,28 @@ export async function getJobIntegrity(jobId: string): Promise<IntegrityIndex> {
   return apiFetch<IntegrityIndex>(`/jobs/${jobId}/integrity`);
 }
 
+export interface OrdinationPoint {
+  asv_id: string;
+  x: number;
+  y: number;
+  cluster: number;
+}
+
+export interface OrdinationResponse {
+  n_asvs: number;
+  n_clusters: number;
+  n_noise_points: number;
+  skipped: boolean;
+  reason: string | null;
+  points: OrdinationPoint[];
+  umap_params: Record<string, unknown> | null;
+  hdbscan_params: Record<string, unknown> | null;
+}
+
+export async function getJobOrdination(jobId: string): Promise<OrdinationResponse> {
+  return apiFetch<OrdinationResponse>(`/jobs/${jobId}/ordination`);
+}
+
 // ─── Exports ──────────────────────────────────────────────────────
 
 // Export URLs are absolute when API_BASE is set so <a href=...> works
