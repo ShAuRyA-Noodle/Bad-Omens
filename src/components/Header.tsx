@@ -1,13 +1,25 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Dna, Terminal, Menu, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { checkHealth } from "@/lib/api";
 
 export const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [time, setTime] = useState("");
   const location = useLocation();
+
+  // Real API status — polled from /health. Reads OFFLINE honestly if down.
+  const { data: health, isError, isLoading } = useQuery({
+    queryKey: ["health"],
+    queryFn: checkHealth,
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const apiStatus = isLoading ? "…" : isError || !health ? "OFFLINE" : health.status === "ok" ? "ONLINE" : health.status.toUpperCase();
+  const statusColor = apiStatus === "ONLINE" ? "text-neon-green" : apiStatus === "OFFLINE" ? "text-red-500" : "text-yellow-500";
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -27,9 +39,9 @@ export const Header = () => {
   return (
     <header className="fixed top-0 w-full z-50 pointer-events-auto border-b border-white/10 bg-black/80 backdrop-blur-md scanline">
       {/* Top technical strip */}
-      <div className="w-full bg-primary/10 border-b border-primary/20 py-1 px-4 flex justify-between items-center text-[10px] font-mono text-primary uppercase tracking-widest hidden md:flex">
-        <span>SYS.STATUS: <span className="animate-pulse">ONLINE</span></span>
-        <span>ENV: PRODUCTION // BIODIVERSITY_DB: CONNECTED</span>
+      <div className="w-full bg-primary/10 border-b border-primary/20 py-1 px-4 justify-between items-center text-[10px] font-mono text-primary uppercase tracking-widest hidden md:flex">
+        <span>API: <span className={cn(statusColor, apiStatus === "ONLINE" && "animate-pulse")}>{apiStatus}</span></span>
+        <span>ENV: {import.meta.env.MODE} {health?.version ? `// v${health.version}` : ""}</span>
         <span>T: {time}</span>
       </div>
 

@@ -4,33 +4,35 @@ import { ChevronRight, Waves, Trees, Droplets, ArrowRight } from "lucide-react";
 import { motion, useInView } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+// Honest use-case descriptors — the tags name the real markers and sample
+// types for each habitat, not fabricated live sensor readouts.
 const targets = [
   {
     id: "TRG_01",
     title: "MARINE_PELAGIC",
     icon: Waves,
-    points: ["[X, Y, Z] DEPTH: -500M", "SALINITY_PROBE: ACTIVE"],
-    desc: "Assess ocean health indicators and track elusive chondrichthyes populations via dispersed genetic markers in 10L grab samples.",
+    points: ["MARKERS: 12S MiFish · COI", "SAMPLE: 1–10 L seawater"],
+    desc: "Assess ocean health indicators and detect elusive fish and elasmobranch populations from dispersed genetic markers in water samples.",
     color: "from-cyan-500/20 to-blue-500/5",
-    borderH: "border-cyan-500/50",
+    hoverBorder: "hover:border-cyan-500/50",
   },
   {
     id: "TRG_02",
     title: "TERRESTRIAL_LENTIC",
     icon: Trees,
-    points: ["GRID_COORD: 45N 122W", "RIPARIAN_ZONE: TRUE"],
-    desc: "Identify entire mammalian presence matrices from isolated water holes. Tracks shedding from dermal layers and saliva.",
+    points: ["MARKERS: 16S · 12S", "SAMPLE: pond water · sediment"],
+    desc: "Identify vertebrate presence from isolated water holes — tracking DNA shed from skin, hair, and saliva without capturing any organism.",
     color: "from-green-500/20 to-emerald-500/5",
-    borderH: "border-green-500/50",
+    hoverBorder: "hover:border-green-500/50",
   },
   {
     id: "TRG_03",
     title: "LOTIC_SYSTEMS",
     icon: Droplets,
-    points: ["FLOW_RATE: 12m/s", "TURBIDITY: HIGH"],
-    desc: "Longitudinal watershed biodiversity tracking. Reconstruct upstream macroinvertebrate and teleost communities.",
+    points: ["MARKERS: COI · 12S", "SAMPLE: flowing stream water"],
+    desc: "Longitudinal watershed biodiversity monitoring — reconstruct upstream macroinvertebrate and fish communities from downstream samples.",
     color: "from-teal-500/20 to-cyan-500/5",
-    borderH: "border-teal-500/50",
+    hoverBorder: "hover:border-teal-500/50",
   }
 ];
 
@@ -73,7 +75,7 @@ export const UseCasesSection = () => {
               transition={{ delay: i * 0.15 }}
               className={cn(
                 "group relative bg-black/40 border border-white/20 hover:bg-black/60 transition-all duration-300 p-6 flex flex-col justify-between hud-panel cursor-crosshair min-h-[400px]",
-                "hover:" + trg.borderH
+                trg.hoverBorder
               )}
             >
               <div className={cn("absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none", trg.color)} />

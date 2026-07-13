@@ -5,7 +5,7 @@ import { Shield, Target, Users, Leaf, Globe, TrendingUp } from "lucide-react";
 const impactAreas = [
   { id: "IMP_01", title: "NON_INVASIVE_SAMPLING", desc: "Isolates DNA traces from abiotic matrices (water/soil). No direct organism disruption or capture required.", icon: Target },
   { id: "IMP_02", title: "DB_CROSS_REFERENCING", desc: "Automated real-time pinging of GBIF occurrences and IUCN Red List. Immediate conservation flags.", icon: Shield },
-  { id: "IMP_03", title: "BLOCKCHAIN_PROVENANCE", desc: "All parameters, container versions, and sequence hashes encoded into immutable JSON manifests.", icon: TrendingUp },
+  { id: "IMP_03", title: "SIGNED_PROVENANCE", desc: "Every parameter, tool version, reference-DB hash, and sequence hash recorded in an Ed25519-signed manifest anyone can verify offline.", icon: TrendingUp },
 ];
 
 const sdg = [

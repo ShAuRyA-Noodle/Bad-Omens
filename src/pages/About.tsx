@@ -79,8 +79,8 @@ const About = () => {
                 </div>
                 <ul className="space-y-4">
                   {[
-                    { pub: "DNABERT-S: Pioneering Species Differentiation", org: "arXiv (2024)" },
-                    { pub: "AI-Assisted eDNA for Marine Monitoring", org: "MDPI (2024)" }
+                    { pub: "VSEARCH: a versatile open-source tool for metagenomics", org: "Rognes et al., PeerJ (2016)" },
+                    { pub: "The SILVA ribosomal RNA gene database project", org: "Quast et al., Nucleic Acids Res (2013)" }
                   ].map(ref => (
                     <li key={ref.pub} className="border-l-2 border-gray-600 pl-3">
                       <div className="text-sm text-gray-300 font-bold uppercase">{ref.pub}</div>

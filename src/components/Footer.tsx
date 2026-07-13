@@ -1,69 +1,68 @@
 import { Link } from "react-router-dom";
 import { Github, Mail, ExternalLink, Activity } from "lucide-react";
 import { useScroll, useTransform, motion } from "framer-motion";
-import { useRef, useState, useEffect } from "react";
+import { useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { checkHealth } from "@/lib/api";
 
 const ASCII_LOGO = `
 ██████╗ ███████╗██╗     ██╗ ██████╗████████╗
 ██╔══██╗██╔════╝██║     ██║██╔════╝╚══██╔══╝
-██████╔╝█████╗  ██║     ██║██║        ██║   
-██╔══██╗██╔══╝  ██║     ██║██║        ██║   
-██║  ██║███████╗███████╗██║╚██████╗   ██║   
-╚═╝  ╚═╝╚══════╝╚══════╝╚═╝ ╚═════╝   ╚═╝   
+██████╔╝█████╗  ██║     ██║██║        ██║
+██╔══██╗██╔══╝  ██║     ██║██║        ██║
+██║  ██║███████╗███████╗██║╚██████╗   ██║
+╚═╝  ╚═╝╚══════╝╚══════╝╚═╝ ╚═════╝   ╚═╝
 `;
+
+type FooterLink = { name: string; href: string; external?: boolean };
+
+const footerLinks: Record<string, FooterLink[]> = {
+  SYSTEMS: [
+    { name: "INIT // DEMO", href: "/demo" },
+    { name: "IMPCT_MTRX", href: "/impact" },
+    { name: "MAN_PAGES", href: "/about" },
+  ],
+  VERIFY: [
+    { name: "PUBLIC_KEY", href: "/public-key", external: true },
+  ],
+  EXT_DB: [
+    { name: "NCBI_SRA", href: "https://www.ncbi.nlm.nih.gov/sra", external: true },
+    { name: "GBIF_ORG", href: "https://www.gbif.org/", external: true },
+    { name: "IUCN_REDLIST", href: "https://www.iucnredlist.org/", external: true },
+  ],
+};
 
 export const Footer = () => {
   const currentYear = new Date().getFullYear();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [logMessages, setLogMessages] = useState<string[]>([]);
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
-    offset: ["start end", "end end"]
+    offset: ["start end", "end end"],
   });
 
   const y = useTransform(scrollYProgress, [0, 1], ["-20%", "0%"]);
   const opacity = useTransform(scrollYProgress, [0, 1], [0.5, 1]);
 
-  useEffect(() => {
-    const logs = [
-      "SYNCHRONIZING REPOSITORY INDEX...",
-      "FETCHING LATEST NCBI_GENBANK RELEASES",
-      "UPDATING SILVA_138.1 TAXONOMY TREE",
-      "RECALIBRATING INFERENCE MODULES",
-      "SYS DAEMON RUNNING OK",
-      "MEM: 24.5 GB / 128 GB [ OK ]",
-    ];
-    let idx = 0;
+  // Real, living status — polls the actual /health endpoint. No fabricated
+  // telemetry: if the API is unreachable this honestly reads OFFLINE.
+  const { data: health, isError, isLoading } = useQuery({
+    queryKey: ["health"],
+    queryFn: checkHealth,
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const apiStatus = isLoading ? "…" : isError || !health ? "OFFLINE" : health.status === "ok" ? "ONLINE" : health.status.toUpperCase();
+  const statusColor = apiStatus === "ONLINE" ? "text-neon-green" : apiStatus === "OFFLINE" ? "text-red-500" : "text-yellow-500";
 
-    const interval = setInterval(() => {
-      setLogMessages(prev => {
-        const newLogs = [...prev, `[${new Date().toISOString().split('T')[1].substring(0, 8)}] ` + logs[idx % logs.length]];
-        if (newLogs.length > 5) newLogs.shift();
-        return newLogs;
-      });
-      idx++;
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const footerLinks = {
-    SYSTEMS: [
-      { name: "INIT // DEMO", href: "/demo" },
-      { name: "VIEW_LOGS", href: "/visualize" },
-      { name: "IMPCT_MTRX", href: "/impact" },
-    ],
-    NODE_CMD: [
-      { name: "MAN_PAGES", href: "/about" },
-    ],
-    EXT_DB: [
-      { name: "NCBI_SRA", href: "https://www.ncbi.nlm.nih.gov/sra", external: true },
-      { name: "MGNIFY_API", href: "https://www.ebi.ac.uk/metagenomics/", external: true },
-      { name: "QIIME2_CORE", href: "https://qiime2.org/", external: true },
-    ],
-  };
+  const statusRows: { label: string; value: string; accent?: string }[] = [
+    { label: "API_STATUS", value: apiStatus, accent: statusColor },
+    { label: "API_VERSION", value: health?.version ? `v${health.version}` : "—" },
+    { label: "PIPELINE", value: "fastp · vsearch UNOISE3 · scikit-bio" },
+    { label: "REFERENCES", value: "SILVA 138.1 · MIDORI2 GB269" },
+    { label: "PROVENANCE", value: "Ed25519-signed manifests" },
+  ];
 
   return (
     <footer
@@ -79,17 +78,20 @@ export const Footer = () => {
       >
         <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-12 sm:gap-24 mb-16">
 
-          {/* Left: Terminal Logging View */}
-          <div className="border border-white/20 bg-black/60 p-4 w-full h-48 overflow-hidden relative shadow-[0_0_20px_rgba(0,0,0,1)]">
+          {/* Left: Real system status (bound to /health) */}
+          <div className="border border-white/20 bg-black/60 p-4 w-full min-h-48 overflow-hidden relative shadow-[0_0_20px_rgba(0,0,0,1)]">
             <div className="flex items-center text-xs text-primary mb-4 pb-2 border-b border-white/10">
               <Activity className="w-4 h-4 mr-2" />
-              <span>SYSTEM EVENT BUS</span>
+              <span>SYSTEM STATUS</span>
+              <span className="ml-auto text-[10px] text-gray-600">live · 30s</span>
             </div>
-            <div className="text-[10px] sm:text-xs text-gray-500 space-y-1">
-              {logMessages.map((log, i) => (
-                <div key={i} className={cn("truncate", i === logMessages.length - 1 && "text-neon-cyan")}>{log}</div>
+            <div className="text-[10px] sm:text-xs space-y-2">
+              {statusRows.map((row) => (
+                <div key={row.label} className="flex items-start justify-between gap-3 border-b border-white/5 pb-1">
+                  <span className="text-gray-600 shrink-0">{row.label}</span>
+                  <span className={cn("text-right break-words", row.accent ?? "text-gray-300")}>{row.value}</span>
+                </div>
               ))}
-              <div className="text-neon-cyan animate-pulse">_</div>
             </div>
           </div>
 
@@ -101,19 +103,26 @@ export const Footer = () => {
                   <span className="text-primary mr-2">+</span>{category}
                 </h3>
                 <ul className="space-y-4">
-                  {links.map((link) => (
-                    <li key={link.name}>
-                      <a
-                        href={link.href}
-                        target={link.external ? "_blank" : "_self"}
-                        className="text-gray-500 hover:text-white hover:bg-white/10 transition-colors flex items-center group py-1 px-2 -ml-2"
-                      >
+                  {links.map((link) => {
+                    const inner = (
+                      <>
                         <span className="text-primary opacity-0 group-hover:opacity-100 mr-2 transition-opacity">&gt;&gt;</span>
                         <span>{link.name}</span>
-                        {link.external && <ExternalLink className="w-3 h-3 ml-2 opacity-30 group-hover:opacity-100 border-b border-transparent" />}
-                      </a>
-                    </li>
-                  ))}
+                        {link.external && <ExternalLink className="w-3 h-3 ml-2 opacity-30 group-hover:opacity-100" />}
+                      </>
+                    );
+                    const classes =
+                      "text-gray-500 hover:text-white hover:bg-white/10 transition-colors flex items-center group py-2 px-2 -ml-2 min-h-[44px]";
+                    return (
+                      <li key={link.name}>
+                        {link.external ? (
+                          <a href={link.href} target="_blank" rel="noopener noreferrer" className={classes}>{inner}</a>
+                        ) : (
+                          <Link to={link.href} className={classes}>{inner}</Link>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
@@ -124,10 +133,10 @@ export const Footer = () => {
         <div className="w-full flex-grow flex flex-col items-center justify-end mx-auto relative px-4">
           <div className="flex flex-col sm:flex-row items-center w-full justify-between mb-8 border-b border-white/20 pb-4 mt-16 sm:mt-0">
             <div className="flex items-center space-x-6 text-gray-500">
-              <a href="https://github.com/ShAuRyA-Noodle/Bad-Omens" target="_blank" rel="noreferrer" className="hover:text-white hover:bg-white/10 p-2 border border-transparent hover:border-white/20 transition-all">
+              <a href="https://github.com/ShAuRyA-Noodle/Bad-Omens" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" className="hover:text-white hover:bg-white/10 p-2 border border-transparent hover:border-white/20 transition-all">
                 <Github className="w-5 h-5" />
               </a>
-              <a href="mailto:workwithshaurya10@gmail.com" className="hover:text-white hover:bg-white/10 p-2 border border-transparent hover:border-white/20 transition-all">
+              <a href="mailto:workwithshaurya10@gmail.com" aria-label="Email the author" className="hover:text-white hover:bg-white/10 p-2 border border-transparent hover:border-white/20 transition-all">
                 <Mail className="w-5 h-5" />
               </a>
             </div>
@@ -143,9 +152,9 @@ export const Footer = () => {
             </pre>
           </div>
 
-          <div className="w-full border-t border-white/20 pt-4 flex justify-between text-[10px] text-gray-600">
-            <div>v0.1.0-dev | BUILD {currentYear}</div>
-            <div className="text-right">WARN: RESEARCH SCOPE ONLY. EXTRAPOLATION FORBIDDEN.</div>
+          <div className="w-full border-t border-white/20 pt-4 flex flex-col sm:flex-row justify-between gap-2 text-[10px] text-gray-600">
+            <div>v0.2.0 | BUILD {currentYear}</div>
+            <div className="sm:text-right">WARN: RESEARCH SCOPE ONLY. NOT CLINICALLY OR LEGALLY CERTIFIED.</div>
           </div>
         </div>
       </motion.div>
