@@ -100,7 +100,9 @@ def _compute_metrics(counts: np.ndarray) -> dict[str, float]:
     try:
         from skbio.diversity import alpha as skbio_alpha
 
-        richness = float(skbio_alpha.observed_otus(counts))
+        # Richness is just the count of observed (non-zero) features — compute
+        # it directly rather than via skbio's deprecated observed_otus.
+        richness = float(np.count_nonzero(counts))
         shannon = float(skbio_alpha.shannon(counts, base=math.e))
         simpson = float(skbio_alpha.simpson(counts))
         chao1 = float(skbio_alpha.chao1(counts))
