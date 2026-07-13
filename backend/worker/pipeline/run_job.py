@@ -44,6 +44,7 @@ from worker.pipeline import denoise_vsearch as denoise_stage
 from worker.pipeline import dereplicate as derep_stage
 from worker.pipeline import diversity as diversity_stage
 from worker.pipeline import ordination as ordination_stage
+from worker.pipeline import primer_trim as primer_stage
 from worker.pipeline import provenance as provenance_stage
 from worker.pipeline import qc as qc_stage
 from worker.pipeline import taxonomy as tax_stage
@@ -271,9 +272,17 @@ def run_job(job_id: str) -> dict[str, str]:
             trimmed_fastq = Path(qc_result.output_files[0])
             _emit(uid, "stage.completed", f"QC done — {qc_result.metrics.get('reads_after_filtering', '?')} reads passed", stage="qc", progress=0.20)
 
+            # ─── Stage 1b: Primer trimming (cutadapt, per marker) ─────
+            marker = job.amplicon.value if job.amplicon else "16S_V4"
+            _emit(uid, "stage.started", "Trimming primers (cutadapt)", stage="primer_trim", progress=0.22)
+            primer_result = primer_stage.run(workspace, trimmed_fastq, marker, logger=log)
+            stage_results.append(primer_result.to_dict())
+            primer_fastq = Path(primer_result.output_files[0])
+            _emit(uid, "stage.completed", f"Primers trimmed — {primer_result.metrics.get('reads_after_trimming', '?')} reads", stage="primer_trim", progress=0.24)
+
             # ─── Stage 2: Dereplication ───────────────────────────────
             _emit(uid, "stage.started", "Dereplicating sequences", stage="derep", progress=0.25)
-            derep_result = derep_stage.run(workspace, trimmed_fastq, logger=log)
+            derep_result = derep_stage.run(workspace, primer_fastq, logger=log)
             stage_results.append(derep_result.to_dict())
             unique_fasta = Path(derep_result.output_files[0])
             _emit(uid, "stage.completed", f"Dereplication done — {derep_result.metrics.get('unique_sequences', '?')} unique sequences", stage="derep", progress=0.35)
