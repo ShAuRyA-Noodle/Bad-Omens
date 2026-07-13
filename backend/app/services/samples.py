@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import UTC
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 from sqlalchemy import func, select
 
@@ -62,6 +62,36 @@ def _parse_amplicon(value: str) -> Amplicon:
         raise InvalidAmplicon(f"Unknown amplicon marker '{value}'. Supported: {supported}") from exc
 
 
+_DWC_STRING_KEYS = ("eventDate", "locality", "recordedBy", "habitat", "waterBody", "country")
+
+
+def _clean_metadata(raw: dict[str, Any] | None) -> dict[str, Any]:
+    """Whitelist + validate Darwin Core sample metadata from the client.
+
+    Coordinates are coerced to float and range-checked; string fields are
+    trimmed and length-capped. Anything invalid or unknown is dropped, so the
+    stored dwc_metadata is always clean and safe to emit into a DwC-A.
+    """
+    if not raw:
+        return {}
+    out: dict[str, Any] = {}
+    for key, lo, hi in (("decimalLatitude", -90.0, 90.0), ("decimalLongitude", -180.0, 180.0)):
+        val = raw.get(key)
+        if val is None or str(val).strip() == "":
+            continue
+        try:
+            num = float(val)
+        except (TypeError, ValueError):
+            continue
+        if lo <= num <= hi:
+            out[key] = num
+    for key in _DWC_STRING_KEYS:
+        val = raw.get(key)
+        if isinstance(val, str) and val.strip():
+            out[key] = val.strip()[:500]
+    return out
+
+
 def _check_filename(filename: str) -> None:
     settings = get_settings()
     lower = filename.lower()
@@ -82,6 +112,7 @@ async def upload_sample(
     stream: BinaryIO,
     content_type: str,
     amplicon: str,
+    metadata: dict[str, Any] | None = None,
 ) -> tuple[Job, Sample, StoredObject]:
     """Create a job + sample row and stream the bytes to object storage.
 
@@ -141,6 +172,7 @@ async def upload_sample(
         sha256=stored.sha256,
         size_bytes=stored.size_bytes,
         content_type=stored.content_type,
+        dwc_metadata=_clean_metadata(metadata),
     )
     session.add(sample)
     await session.flush()

@@ -1,8 +1,10 @@
 """Sample routes — upload, inspect, delete."""
 from __future__ import annotations
 
+import json
 import uuid  # noqa: TC003 — FastAPI uses this for path param introspection
 from datetime import timedelta
+from typing import Any
 
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile, status
 
@@ -27,6 +29,7 @@ async def upload_sample(
     session: SessionDep,
     file: UploadFile,
     amplicon: str = Form("16S_V4", description="Amplicon marker, e.g. 12S_MiFish, COI_Leray, 16S_V4"),
+    metadata: str = Form("{}", description="Optional Darwin Core sample metadata as a JSON object."),
 ) -> SampleUploadResponse:
     if file.filename is None or file.filename.strip() == "":
         raise HTTPException(
@@ -51,6 +54,16 @@ async def upload_sample(
             )
 
     try:
+        metadata_obj: dict[str, Any] = json.loads(metadata) if metadata else {}
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="metadata must be a JSON object",
+        ) from exc
+    if not isinstance(metadata_obj, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="metadata must be a JSON object")
+
+    try:
         _job, sample, _stored = await samples_service.upload_sample(
             session,
             user=user,
@@ -58,6 +71,7 @@ async def upload_sample(
             stream=file.file,
             content_type=file.content_type or "application/octet-stream",
             amplicon=amplicon,
+            metadata=metadata_obj,
         )
     except samples_service.UnsupportedSampleFormat as exc:
         raise HTTPException(

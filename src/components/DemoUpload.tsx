@@ -21,6 +21,8 @@ export const DemoUpload = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [amplicon, setAmplicon] = useState<string>("16S_V4");
+  const [meta, setMeta] = useState<Record<string, string>>({});
+  const setMetaField = (k: string, v: string) => setMeta((m) => ({ ...m, [k]: v }));
 
   const [authMode, setAuthMode] = useState<"login" | "signup">("signup");
   const [email, setEmail] = useState("");
@@ -112,7 +114,10 @@ export const DemoUpload = () => {
       setStageMessage("Uploading sequence array...");
 
       try {
-        const result = await uploadSample(file, amplicon);
+        const cleanMeta = Object.fromEntries(
+          Object.entries(meta).filter(([, v]) => v.trim() !== "")
+        );
+        const result = await uploadSample(file, amplicon, cleanMeta);
         const jid = result.sample.job_id;
         setJobId(jid);
         setUploadProgress(10);
@@ -129,7 +134,7 @@ export const DemoUpload = () => {
         toast({ title: "Upload failed", description: msg, variant: "destructive" });
       }
     },
-    [toast, amplicon]
+    [toast, amplicon, meta]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -235,6 +240,23 @@ export const DemoUpload = () => {
         </div>
       </div>
 
+      {/* Optional Darwin Core sample metadata — powers the map and a complete
+          DwC-A archive. Where + when the sample was collected. */}
+      <details className="border border-white/10 bg-black/60 backdrop-blur-md p-4 hud-bracket group">
+        <summary className="text-[11px] text-gray-500 uppercase tracking-widest cursor-pointer flex items-center justify-between list-none select-none min-h-[24px]">
+          <span>Sample Metadata <span className="text-gray-600">· optional</span></span>
+          <span className="text-neon-cyan group-open:rotate-90 transition-transform">›</span>
+        </summary>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+          <MetaInput label="Latitude" placeholder="e.g. 30.7333" value={meta.decimalLatitude ?? ""} onChange={(v) => setMetaField("decimalLatitude", v)} type="number" />
+          <MetaInput label="Longitude" placeholder="e.g. 76.7794" value={meta.decimalLongitude ?? ""} onChange={(v) => setMetaField("decimalLongitude", v)} type="number" />
+          <MetaInput label="Event date" value={meta.eventDate ?? ""} onChange={(v) => setMetaField("eventDate", v)} type="date" />
+          <MetaInput label="Locality" placeholder="e.g. Sukhna Lake" value={meta.locality ?? ""} onChange={(v) => setMetaField("locality", v)} />
+          <MetaInput label="Collected by" placeholder="name" value={meta.recordedBy ?? ""} onChange={(v) => setMetaField("recordedBy", v)} />
+          <MetaInput label="Habitat" placeholder="e.g. freshwater lake" value={meta.habitat ?? ""} onChange={(v) => setMetaField("habitat", v)} />
+        </div>
+      </details>
+
       <div
         {...getRootProps()}
         className={cn(
@@ -333,3 +355,31 @@ export const DemoUpload = () => {
     </div>
   );
 };
+
+function MetaInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</span>
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        step={type === "number" ? "any" : undefined}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full mt-1 px-3 py-2 bg-black border border-white/15 text-sm text-gray-200 focus:border-primary focus:outline-none placeholder-gray-700 min-h-[44px]"
+      />
+    </label>
+  );
+}

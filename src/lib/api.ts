@@ -279,10 +279,17 @@ export const AMPLICON_MARKERS = [
   { value: "rbcL", label: "rbcL", note: "plants" },
 ] as const;
 
-export async function uploadSample(file: File, amplicon: string): Promise<{ sample: SamplePublic; download_url: string }> {
+export async function uploadSample(
+  file: File,
+  amplicon: string,
+  metadata?: Record<string, string>,
+): Promise<{ sample: SamplePublic; download_url: string }> {
   const form = new FormData();
   form.append("file", file);
   form.append("amplicon", amplicon);
+  if (metadata && Object.keys(metadata).length > 0) {
+    form.append("metadata", JSON.stringify(metadata));
+  }
   const res = await fetch(`${API_V1}/samples/upload`, {
     method: "POST",
     headers: authHeaders(),
