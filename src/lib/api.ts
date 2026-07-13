@@ -36,7 +36,34 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+// Shared in-flight refresh so concurrent 401s trigger exactly one refresh.
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  const rt = localStorage.getItem("relict_refresh_token");
+  if (!rt) return false;
+  try {
+    const res = await fetch(`${API_V1}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: rt }),
+    });
+    if (!res.ok) {
+      // Refresh token is invalid/expired — clear session so the app logs out cleanly.
+      setAccessToken(null);
+      localStorage.removeItem("relict_refresh_token");
+      return false;
+    }
+    const tokens: TokenPair = await res.json();
+    setAccessToken(tokens.access_token);
+    localStorage.setItem("relict_refresh_token", tokens.refresh_token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit, _retried = false): Promise<T> {
   const res = await fetch(`${API_V1}${path}`, {
     ...init,
     headers: {
@@ -44,6 +71,19 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers || {}),
     },
   });
+
+  // On an expired access token, transparently refresh once and retry — instead
+  // of silently logging the user out mid-job (the refresh token was stored but
+  // never used before).
+  if (res.status === 401 && !_retried && localStorage.getItem("relict_refresh_token")) {
+    if (!refreshInFlight) {
+      refreshInFlight = refreshAccessToken().finally(() => { refreshInFlight = null; });
+    }
+    if (await refreshInFlight) {
+      return apiFetch<T>(path, init, true);
+    }
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: { message: res.statusText } }));
     throw new Error(body?.error?.message || body?.detail || `API error ${res.status}`);

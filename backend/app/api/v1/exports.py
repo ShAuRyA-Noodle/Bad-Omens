@@ -177,7 +177,7 @@ async def export_csv(
 
 @router.get(
     "/biom",
-    summary="Download ASV table as BIOM format (for QIIME2 / phyloseq)",
+    summary="Download ASV table as BIOM 1.0 (JSON) for phyloseq / BIOM tools",
     response_class=Response,
 )
 async def export_biom(
@@ -185,11 +185,12 @@ async def export_biom(
     user: CurrentUser,
     session: SessionDep,
 ) -> Response:
-    """Download the ASV abundance table in BIOM 2.1 JSON format.
+    """Download the ASV abundance table in BIOM 1.0 (JSON) format.
 
-    BIOM (Biological Observation Matrix) is the standard interchange
-    format for microbiome data. The exported file can be imported into
-    QIIME2, phyloseq, or any other BIOM-compatible tool.
+    BIOM (Biological Observation Matrix) is a standard interchange format for
+    microbiome data. This is the classic **BIOM 1.0 JSON** representation
+    (BIOM >= 2.0 is HDF5 and is not what this endpoint emits), suitable for
+    phyloseq and other BIOM-1.0-compatible tools.
     """
     import json as json_mod
 
@@ -227,8 +228,9 @@ async def export_biom(
 
     biom_data = {
         "id": str(job.id),
-        "format": "Biological Observation Matrix 2.1.0",
+        "format": "Biological Observation Matrix 1.0.0",
         "format_url": "http://biom-format.org",
+        "format_version": [1, 0, 0],
         "generated_by": f"Relict v{job.pipeline_version or 'unknown'}",
         "type": "OTU table",
         "matrix_type": "dense",

@@ -215,6 +215,12 @@ class Job(UUIDPrimaryKey, Timestamped, Base):
         passive_deletes=True,
     )
 
+    __table_args__ = (
+        # Hot path: list a user's jobs newest-first. Without this composite
+        # index the query sorts on every page load.
+        Index("ix_jobs_user_created", "user_id", "created_at"),
+    )
+
 
 class Sample(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "samples"
