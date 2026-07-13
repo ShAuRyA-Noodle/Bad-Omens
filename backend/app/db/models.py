@@ -111,6 +111,12 @@ class User(UUIDPrimaryKey, Timestamped, Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    projects: Mapped[list[Project]] = relationship(
+        "Project",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         Index("ix_users_email_lower", "email", unique=True),
@@ -141,6 +147,33 @@ class RefreshSession(UUIDPrimaryKey, Timestamped, Base):
     user: Mapped[User] = relationship("User", back_populates="refresh_sessions")
 
 
+# ─── Projects ───────────────────────────────────────────────────────────
+
+
+class Project(UUIDPrimaryKey, Timestamped, Base):
+    """A study grouping multiple sample-analysis jobs.
+
+    Enables cross-sample analysis (beta-diversity / PCoA, temporal trends) that
+    a single job cannot express. Each Job optionally belongs to one Project;
+    deleting a project detaches its jobs (project_id -> NULL) rather than
+    deleting them.
+    """
+
+    __tablename__ = "projects"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+
+    user: Mapped[User] = relationship("User", back_populates="projects")
+    jobs: Mapped[list[Job]] = relationship("Job", back_populates="project")
+
+
 # ─── Jobs + Samples ─────────────────────────────────────────────────────
 
 
@@ -159,6 +192,12 @@ class Job(UUIDPrimaryKey, Timestamped, Base):
     amplicon: Mapped[Amplicon] = mapped_column(
         amplicon_enum, nullable=False, default=Amplicon.OTHER
     )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Parameter hash allows two runs with the same inputs + params to be
     # detected as equivalent. Used by the provenance manifest.
@@ -174,6 +213,7 @@ class Job(UUIDPrimaryKey, Timestamped, Base):
     rq_job_id: Mapped[str | None] = mapped_column(String(64), unique=True)
 
     user: Mapped[User] = relationship("User", back_populates="jobs")
+    project: Mapped[Project | None] = relationship("Project", back_populates="jobs")
     samples: Mapped[list[Sample]] = relationship(
         "Sample",
         back_populates="job",
@@ -529,6 +569,7 @@ __all__ = [
     "Job",
     "JobStatus",
     "OrdinationResult",
+    "Project",
     "Provenance",
     "RefreshSession",
     "Sample",

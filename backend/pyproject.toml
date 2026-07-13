@@ -52,6 +52,9 @@ dependencies = [
     # ─── HTTP client (for external APIs in later phases) ────────────
     "httpx==0.28.1",
     "tenacity==9.0.0",                   # retry with backoff
+
+    # ─── Numerics (cross-sample PCoA in the API) ────────────────────
+    "numpy==2.2.1",
 ]
 
 [project.optional-dependencies]

@@ -17,7 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
 from app.api import public
-from app.api.v1 import auth, exports, health, jobs, results, samples, ws
+from app.api.v1 import auth, exports, health, jobs, projects, results, samples, ws
 from app.core.config import get_settings
 from app.core.logging import (
     bind_request_context,
@@ -177,6 +177,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
     app.include_router(samples.router, prefix=settings.API_V1_PREFIX)
     app.include_router(jobs.router, prefix=settings.API_V1_PREFIX)
+    app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
     app.include_router(results.router, prefix=settings.API_V1_PREFIX)
     app.include_router(exports.router, prefix=settings.API_V1_PREFIX)
 
