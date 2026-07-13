@@ -6,6 +6,7 @@ import { Footer } from "@/components/Footer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IntegrityMatrix } from "@/components/IntegrityMatrix";
 import { CompositionMap } from "@/components/CompositionMap";
+import { ThreatenedSpotlight } from "@/components/ThreatenedSpotlight";
 import { cn } from "@/lib/utils";
 import {
   getJobSummary,
@@ -119,6 +120,9 @@ export default function JobResults() {
               </span>
             )}
           </div>
+
+          {/* Conservation alert — the "we detected a threatened species" lead. */}
+          <ThreatenedSpotlight jobId={jobId} enabled={succeeded} />
 
           {/* Flagship: the Ecosystem Integrity Index grade matrix. */}
           <IntegrityMatrix jobId={jobId} enabled={succeeded} />
