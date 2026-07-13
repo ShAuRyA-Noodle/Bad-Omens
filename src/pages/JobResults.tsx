@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IntegrityMatrix } from "@/components/IntegrityMatrix";
 import { CompositionMap } from "@/components/CompositionMap";
 import { ThreatenedSpotlight } from "@/components/ThreatenedSpotlight";
+import { SampleMap } from "@/components/SampleMap";
 import { cn } from "@/lib/utils";
 import {
   getJobSummary,
@@ -126,6 +127,9 @@ export default function JobResults() {
 
           {/* Flagship: the Ecosystem Integrity Index grade matrix. */}
           <IntegrityMatrix jobId={jobId} enabled={succeeded} />
+
+          {/* Geospatial context — self-hides when the sample has no coordinates. */}
+          <SampleMap jobId={jobId} enabled={succeeded} />
 
           {job && !succeeded && (
             <Panel label={`Job Status // ${job.status}`}>

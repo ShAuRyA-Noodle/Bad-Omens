@@ -97,6 +97,7 @@ async def job_summary(
         n_assigned=n_assigned,
         diversity=diversity,
         amplicon=job.amplicon.value,
+        dwc_metadata=sample.dwc_metadata if sample else None,
     )
 
 

@@ -88,6 +88,7 @@ class JobResultsSummary(BaseModel):
     n_assigned: int
     diversity: DiversityPublic | None
     amplicon: str
+    dwc_metadata: dict[str, Any] | None = None
 
 
 class EIIComponentPublic(BaseModel):

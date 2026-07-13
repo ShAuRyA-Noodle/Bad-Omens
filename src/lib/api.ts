@@ -215,6 +215,7 @@ export interface JobResultsSummary {
   n_assigned: number;
   diversity: DiversityPublic | null;
   amplicon: string;
+  dwc_metadata: Record<string, string | number> | null;
 }
 
 export interface EIIComponent {
