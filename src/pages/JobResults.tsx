@@ -162,7 +162,7 @@ export default function JobResults() {
                 {summaryLoading || !summary ? <Loading label="Computing metrics" /> : <OverviewTab summary={summary} />}
                 <CompositionMap jobId={jobId} enabled={succeeded} />
               </TabsContent>
-              <TabsContent value="asvs">{asvsLoading || !asvs ? <Loading label="Loading ASVs" /> : <ASVsTab asvs={asvs} />}</TabsContent>
+              <TabsContent value="asvs">{asvsLoading || !asvs ? <Loading label="Loading ASVs" /> : <ASVsTab asvs={asvs} total={summary?.n_asvs} />}</TabsContent>
               <TabsContent value="conservation">{consLoading || !conservation ? <Loading label="Cross-referencing GBIF/IUCN" /> : <ConservationTab data={conservation} />}</TabsContent>
               <TabsContent value="provenance">{provLoading || !provenance ? <Loading label="Loading manifest" /> : <ProvenanceTab data={provenance} />}</TabsContent>
               <TabsContent value="export"><ExportTab jobId={jobId} /></TabsContent>
@@ -191,12 +191,16 @@ function OverviewTab({ summary }: { summary: JobResultsSummary }) {
   );
 }
 
-function ASVsTab({ asvs }: { asvs: ASVWithTaxon[] }) {
+function ASVsTab({ asvs, total }: { asvs: ASVWithTaxon[]; total?: number }) {
   if (asvs.length === 0) {
     return <Panel label="ASVs"><p className="text-sm text-gray-400">No ASVs were inferred for this sample.</p></Panel>;
   }
+  const capped = total != null && total > asvs.length;
   return (
-    <Panel label={`Amplicon Sequence Variants // ${asvs.length}`}>
+    <Panel label={`Amplicon Sequence Variants // ${asvs.length}${capped ? ` of ${total}` : ""}`}>
+      {capped && (
+        <p className="text-[11px] text-gray-500 mb-3">Showing the {asvs.length} most abundant ASVs of {total}.</p>
+      )}
       <div className="space-y-3">
         {asvs.map((asv, i) => {
           const t = asv.taxon;

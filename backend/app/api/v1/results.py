@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -109,7 +109,15 @@ async def job_asvs(
     job_id: uuid.UUID,
     user: CurrentUser,
     session: SessionDep,
+    limit: int = Query(500, ge=1, le=2000, description="Max ASVs to return (abundance-desc)."),
+    offset: int = Query(0, ge=0),
 ) -> list[ASVWithTaxon]:
+    """Return this job's ASVs (most abundant first), bounded + paginated.
+
+    A single sample can yield tens of thousands of ASVs; returning them all with
+    full sequences is a multi-MB payload that freezes the browser, so the result
+    is capped (default 500) and paginated with limit/offset.
+    """
     job = await _get_succeeded_job(session, job_id, user)
 
     stmt = (
@@ -117,6 +125,8 @@ async def job_asvs(
         .where(ASV.job_id == job.id)
         .options(selectinload(ASV.taxon))
         .order_by(ASV.abundance.desc())
+        .limit(limit)
+        .offset(offset)
     )
     asvs = list(await session.scalars(stmt))
 

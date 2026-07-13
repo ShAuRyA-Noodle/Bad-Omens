@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Dna, Terminal, Menu, X } from "lucide-react";
+import { Dna, Terminal, Menu, X, User } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { checkHealth } from "@/lib/api";
+import { checkHealth, getAccessToken } from "@/lib/api";
 
 export const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -20,6 +20,7 @@ export const Header = () => {
   });
   const apiStatus = isLoading ? "…" : isError || !health ? "OFFLINE" : health.status === "ok" ? "ONLINE" : health.status.toUpperCase();
   const statusColor = apiStatus === "ONLINE" ? "text-neon-green" : apiStatus === "OFFLINE" ? "text-red-500" : "text-yellow-500";
+  const authed = !!getAccessToken();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -77,7 +78,17 @@ export const Header = () => {
           })}
         </div>
 
-        <div className="hidden md:flex items-center space-x-4">
+        <div className="hidden md:flex items-center space-x-3">
+          {authed && (
+            <Link
+              to="/profile"
+              title="Account"
+              className="text-xs text-gray-400 hover:text-neon-cyan flex items-center border border-white/15 px-3 py-2 uppercase tracking-wider transition-colors"
+            >
+              <User className="w-3.5 h-3.5 mr-2" />
+              ACCOUNT
+            </Link>
+          )}
           <Link
             to="/demo"
             className="btn-cyber px-4 py-2 text-xs flex items-center"
@@ -124,7 +135,16 @@ export const Header = () => {
                   {item.name}
                 </Link>
               ))}
-              <div className="pt-4 border-t border-white/10">
+              <div className="pt-4 border-t border-white/10 space-y-3">
+                {authed && (
+                  <Link
+                    to="/profile"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-gray-400 w-full flex items-center justify-center gap-2 border border-white/15 py-3 hover:text-neon-cyan"
+                  >
+                    <User className="w-4 h-4" /> ACCOUNT
+                  </Link>
+                )}
                 <Link
                   to="/demo"
                   onClick={() => setIsMobileMenuOpen(false)}
