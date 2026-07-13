@@ -29,10 +29,16 @@
     --secondary-foreground: 0 0% 0%;
 
     --muted: 0 0% 10%;
-    --muted-foreground: 183 15% 40%;
+    /* Raised from 15% 40% (~3.7:1, fails AA on black) to meet WCAG AA 4.5:1. */
+    --muted-foreground: 183 18% 66%;
 
     --accent: 183 100% 50%;
     --accent-foreground: 0 0% 0%;
+
+    /* Success accent — alias of the neon-green primary, used on the results
+       surface (e.g. the 'succeeded' job badge). Previously undefined, so
+       bg-emerald / text-emerald rendered transparent. */
+    --emerald: 111 100% 54%;
 
     --destructive: 0 100% 50%;
     --destructive-foreground: 0 0% 100%;
@@ -137,6 +143,26 @@
   .text-neon-green {
     color: hsl(var(--primary));
     text-shadow: 0 0 5px hsl(var(--primary) / 0.5), 0 0 15px hsl(var(--primary) / 0.3);
+  }
+
+  /* Neon fills + borders — parallel to the text-* glow utilities above so
+     bg-/border-neon-* resolve to real colors. The EII grade matrix (progress
+     bars + grade ring) and product surfaces depend on these; without them
+     those classes were undefined and rendered invisible. */
+  .bg-neon-cyan {
+    background-color: hsl(var(--secondary));
+  }
+
+  .bg-neon-green {
+    background-color: hsl(var(--primary));
+  }
+
+  .border-neon-cyan {
+    border-color: hsl(var(--secondary));
+  }
+
+  .border-neon-green {
+    border-color: hsl(var(--primary));
   }
 
   /* Cyber Button */
