@@ -83,7 +83,11 @@ class Settings(BaseSettings):
     JWT_REFRESH_TTL_DAYS: int = 14
 
     # ─── Upload limits ────────────────────────────────────────────────
-    MAX_UPLOAD_BYTES: int = 500 * 1024 * 1024  # 500 MiB
+    MAX_UPLOAD_BYTES: int = 500 * 1024 * 1024  # 500 MiB (compressed, on the wire)
+    # Cap on the *decompressed* size of an uploaded gzip. A small gzip can
+    # expand to many GB and fill the worker disk (decompression-bomb DoS), so
+    # the worker rejects anything that inflates past this before running fastp.
+    MAX_DECOMPRESSED_BYTES: int = 5 * 1024 * 1024 * 1024  # 5 GiB
     ALLOWED_UPLOAD_SUFFIXES: tuple[str, ...] = (
         ".fastq",
         ".fastq.gz",

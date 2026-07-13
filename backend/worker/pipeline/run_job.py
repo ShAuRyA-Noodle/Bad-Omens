@@ -191,6 +191,38 @@ def _download_sample_from_minio(s3_key: str, dest: Path) -> None:
     client.fget_object(settings.MINIO_BUCKET, s3_key, str(dest))
 
 
+def _guard_decompression_bomb(path: Path, max_bytes: int) -> None:
+    """Reject a gzip that expands past ``max_bytes`` (decompression-bomb DoS).
+
+    Reads the decompressed stream in chunks and stops at the cap, so at most
+    ``max_bytes`` of decompressed data is ever read regardless of how large the
+    bomb is. No-op for non-gzip input.
+    """
+    import gzip
+
+    with open(path, "rb") as f:
+        if f.read(2) != b"\x1f\x8b":  # not gzip
+            return
+
+    total = 0
+    try:
+        with gzip.open(path, "rb") as gz:
+            while True:
+                chunk = gz.read(8 * 1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    limit_gib = max_bytes // (1024 * 1024 * 1024)
+                    raise StageError(
+                        "qc",
+                        f"Uploaded gzip expands beyond the {limit_gib} GiB decompression "
+                        "limit and was rejected as a potential decompression bomb.",
+                    )
+    except (OSError, EOFError) as exc:
+        raise StageError("qc", f"Could not read the uploaded gzip: {exc!s}") from exc
+
+
 def run_job(job_id: str) -> dict[str, str]:
     """RQ entrypoint. Called with ``job_id`` as a string (RQ serialises kwargs)."""
     configure_logging(get_settings().LOG_LEVEL)
@@ -229,6 +261,7 @@ def run_job(job_id: str) -> dict[str, str]:
             raw_fastq = workspace / sample.filename
             _emit(uid, "stage.started", "Downloading sample from storage", stage="download")
             _download_sample_from_minio(sample.s3_key, raw_fastq)
+            _guard_decompression_bomb(raw_fastq, get_settings().MAX_DECOMPRESSED_BYTES)
             _emit(uid, "stage.completed", "Sample downloaded", stage="download", progress=0.05)
 
             # ─── Stage 1: QC ──────────────────────────────────────────
