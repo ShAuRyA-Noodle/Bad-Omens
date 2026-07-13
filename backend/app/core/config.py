@@ -103,16 +103,12 @@ class Settings(BaseSettings):
     RATE_LIMIT_AUTH_PER_MINUTE: int = 10
     MAX_CONCURRENT_JOBS_PER_USER: int = 5
 
-    # ─── External APIs (used in later phases) ─────────────────────────
+    # ─── External APIs ────────────────────────────────────────────────
+    # Only the IUCN token is consumed today (the conservation stage). GBIF is
+    # queried unauthenticated. GBIF-publishing, NCBI, and Zenodo settings are
+    # re-introduced with the features that actually consume them (flagship
+    # roadmap) rather than sitting here as unused, misleading config.
     IUCN_REDLIST_TOKEN: SecretStr | None = None
-    GBIF_USERNAME: str | None = None
-    GBIF_PASSWORD: SecretStr | None = None
-    GBIF_EMAIL: str | None = None
-    NCBI_API_KEY: SecretStr | None = None
-    NCBI_EMAIL: str | None = None
-
-    # ─── Optional ─────────────────────────────────────────────────────
-    ZENODO_SANDBOX_TOKEN: SecretStr | None = None
 
     # ─── Derived URLs ─────────────────────────────────────────────────
     @property

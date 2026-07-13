@@ -28,11 +28,6 @@ for _var in (
     "MINIO_SECURE",
     "JWT_SECRET",
     "IUCN_REDLIST_TOKEN",
-    "GBIF_USERNAME",
-    "GBIF_PASSWORD",
-    "GBIF_EMAIL",
-    "NCBI_API_KEY",
-    "NCBI_EMAIL",
     "ENVIRONMENT",
     "LOG_LEVEL",
 ):
