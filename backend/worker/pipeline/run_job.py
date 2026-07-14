@@ -44,6 +44,7 @@ from worker.pipeline import denoise_vsearch as denoise_stage
 from worker.pipeline import dereplicate as derep_stage
 from worker.pipeline import diversity as diversity_stage
 from worker.pipeline import ordination as ordination_stage
+from worker.pipeline import phylogeny as phylo_stage
 from worker.pipeline import primer_trim as primer_stage
 from worker.pipeline import provenance as provenance_stage
 from worker.pipeline import qc as qc_stage
@@ -350,6 +351,29 @@ def run_job(job_id: str) -> dict[str, str]:
             stage_results.append(div_result.to_dict())
             _emit(uid, "stage.completed", f"Diversity done — Shannon={div_result.metrics.get('shannon', '?')}", stage="diversity", progress=0.85)
 
+            # ─── Stage 5b: Phylogeny → Faith's PD ─────────────────────
+            # Builds a de-novo MAFFT+FastTree tree and computes Faith's
+            # Phylogenetic Diversity. Enrichment, not a core gate: a tool
+            # failure is logged and leaves faith_pd NULL rather than failing an
+            # otherwise-valid job. The result is merged into the diversity
+            # metrics so it is persisted and covered by the signed manifest.
+            _emit(uid, "stage.started", "Building phylogenetic tree (MAFFT + FastTree)", stage="phylogeny", progress=0.86)
+            try:
+                phylo_result = phylo_stage.run(workspace, asvs_fasta, logger=log)
+                stage_results.append(phylo_result.to_dict())
+                faith_pd = phylo_result.metrics.get("faith_pd")
+                div_result.metrics["faith_pd"] = faith_pd
+                if faith_pd is not None:
+                    _emit(uid, "stage.completed", f"Phylogeny done — Faith's PD={round(faith_pd, 3)}", stage="phylogeny", progress=0.875)
+                else:
+                    note = phylo_result.metrics.get("note", "Faith's PD not computed")
+                    _emit(uid, "stage.completed", f"Phylogeny — {note}", stage="phylogeny", progress=0.875)
+            except StageError as exc:
+                # A tree-build failure must not sink a valid job — record NULL honestly.
+                log.warning("pipeline.phylogeny_failed", job_id=job_id, error=str(exc))
+                div_result.metrics["faith_pd"] = None
+                _emit(uid, "stage.skipped", "Phylogeny skipped — tree build failed; Faith's PD unavailable", stage="phylogeny", progress=0.875)
+
             # ─── Stage 6: Ordination ──────────────────────────────────
             _ensure_not_cancelled(session, uid)
             _emit(uid, "stage.started", "Computing UMAP ordination", stage="ordination", progress=0.88)
@@ -606,6 +630,7 @@ def _persist_results(
             simpson=m.get("simpson"),
             chao1=m.get("chao1"),
             evenness=m.get("evenness"),
+            faith_pd=m.get("faith_pd"),
         )
         session.add(dm)
 

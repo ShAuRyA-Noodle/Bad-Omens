@@ -24,6 +24,11 @@ _CLI_TOOLS: dict[str, tuple[list[str], str]] = {
     "fastp": (["fastp", "--version"], r"fastp\s+v?([0-9][0-9A-Za-z.\-_]*)"),
     "vsearch": (["vsearch", "--version"], r"vsearch\s+v?([0-9][0-9A-Za-z.\-_]*)"),
     "cutadapt": (["cutadapt", "--version"], r"([0-9][0-9A-Za-z.\-_]*)"),
+    # MAFFT prints "v7.505 (…)" to stderr; --version exits cleanly.
+    "mafft": (["mafft", "--version"], r"v?([0-9][0-9A-Za-z.\-_]*)"),
+    # FastTree has no --version; -expert prints "…FastTree 2.1.11…" and exits
+    # (running it bare would block on stdin, so never do that).
+    "fasttree": (["fasttree", "-expert"], r"FastTree\s+v?(?:ersion\s+)?([0-9][0-9A-Za-z.\-_]*)"),
 }
 
 # Python distributions: tool name -> distribution name on PyPI.

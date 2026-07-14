@@ -21,6 +21,8 @@ TOOL_VERSIONS: dict[str, str] = {
     "umap-learn": "0.5.7",
     "hdbscan": "0.8.40",
     "biom-format": "2.1.16",
+    "mafft": "7.505",
+    "fasttree": "2.1.11",
 }
 
 __all__ = ["PIPELINE_VERSION", "TOOL_VERSIONS"]

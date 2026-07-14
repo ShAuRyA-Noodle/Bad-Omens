@@ -3,7 +3,8 @@
 Runs the real bioinformatics stages against generated reads to certify the
 actual binaries (fastp, cutadapt, vsearch) and the stage code execute together:
 QC -> primer trim (cutadapt) -> dereplicate -> denoise+chimera (vsearch UNOISE3
-+ uchime3) -> diversity (scikit-bio) -> Ecosystem Integrity Index.
++ uchime3) -> diversity (scikit-bio) -> phylogeny (MAFFT + FastTree -> Faith's
+PD) -> Ecosystem Integrity Index.
 
 Taxonomy/conservation are skipped (no reference DB). This is not a scientific
 benchmark — it proves the pipeline runs cleanly on real tools and that the new
@@ -20,6 +21,7 @@ from pathlib import Path
 from worker.pipeline import denoise_vsearch as denoise_stage
 from worker.pipeline import dereplicate as derep_stage
 from worker.pipeline import diversity as diversity_stage
+from worker.pipeline import phylogeny as phylo_stage
 from worker.pipeline import primer_trim as primer_stage
 from worker.pipeline import qc as qc_stage
 from worker.pipeline.integrity_index import compute_eii
@@ -82,6 +84,11 @@ def main() -> int:
         dv = diversity_stage.run(ws, asvs, logger=None)
         print(f"[smoke] diversity: {dv.metrics}")
 
+        ph = phylo_stage.run(ws, asvs, logger=None)
+        print(f"[smoke] phylogeny: faith_pd={ph.metrics.get('faith_pd')} "
+              f"n_tips={ph.metrics.get('n_tips')} tool={ph.tool_version}")
+        dv.metrics["faith_pd"] = ph.metrics.get("faith_pd")
+
         eii = compute_eii(
             richness=dv.metrics.get("richness"),
             shannon=dv.metrics.get("shannon"),
@@ -92,6 +99,9 @@ def main() -> int:
         print(f"[smoke] EII: grade={eii.grade} score={eii.score} assessed_weight={eii.assessed_weight}")
 
         assert dn.metrics.get("n_asvs", 0) >= 1, "expected at least one ASV"
+        n_tips = ph.metrics.get("n_tips", 0)
+        if n_tips >= 3:
+            assert ph.metrics.get("faith_pd") is not None, "expected real Faith's PD with >=3 ASVs"
         print("[smoke] OK — pipeline ran end-to-end on real tools")
     return 0
 

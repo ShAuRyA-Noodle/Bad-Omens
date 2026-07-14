@@ -198,6 +198,7 @@ function OverviewTab({ summary }: { summary: JobResultsSummary }) {
       <MetricCard label="Richness" value={d?.richness ?? "—"} />
       <MetricCard label="Chao1" value={d?.chao1?.toFixed(2) ?? "—"} />
       <MetricCard label="Evenness" value={d?.evenness?.toFixed(4) ?? "—"} />
+      <MetricCard label="Faith's PD" value={d?.faith_pd?.toFixed(4) ?? "—"} />
       <MetricCard label="Marker" value={summary.amplicon} />
     </div>
   );

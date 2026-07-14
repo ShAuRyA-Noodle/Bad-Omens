@@ -6,6 +6,8 @@
 #    fastp 0.24.0     — QC & adapter trimming
 #    vsearch 2.28.1   — dereplication, UNOISE3 ASV inference, taxonomy
 #    cutadapt 4.9     — primer trimming
+#    mafft 7.505      — multiple-sequence alignment (phylogeny)
+#    fasttree 2.1.11  — approximate-ML tree inference (Faith's PD)
 #    scikit-bio 0.6.0 — diversity metrics
 #    umap-learn 0.5.6 — ordination
 #    hdbscan 0.8.40   — density-based clustering
@@ -107,6 +109,8 @@ RUN apt-get update \
       libopenblas0 \
       libisal2 \
       libdeflate0 \
+      mafft \
+      fasttree \
       tini \
       curl \
  && rm -rf /var/lib/apt/lists/* \
@@ -131,7 +135,8 @@ RUN mkdir -p /data/references && chown worker:worker /data/references
 USER worker
 
 # Verify tools are available
-RUN fastp --version && vsearch --version && python -c "import Bio; import skbio; import umap; import hdbscan; print('All bioinformatics deps OK')"
+RUN fastp --version && vsearch --version && mafft --version && fasttree -expert 2>&1 | head -1 \
+ && python -c "import Bio; import skbio; import umap; import hdbscan; from skbio.diversity.alpha import faith_pd; print('All bioinformatics deps OK')"
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["python", "-m", "worker.main"]

@@ -11,7 +11,9 @@ Metrics computed:
   - Pielou's evenness (J') — H' / ln(S)
   - Chao1 — estimated true richness from observed + singletons/doubletons
 
-Faith's PD is deferred to Phase 5 (requires a phylogenetic tree).
+Faith's Phylogenetic Diversity is computed separately by the ``phylogeny``
+stage (MAFFT + FastTree tree → scikit-bio), which requires a phylogenetic
+tree, and merged into the persisted diversity metrics.
 
 Outputs:
   workspace/diversity/metrics.json — JSON with all computed values
