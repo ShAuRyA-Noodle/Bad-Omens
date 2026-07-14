@@ -8,10 +8,10 @@ module:
 2. Queries the GBIF Occurrence API for a global occurrence count
    so the user knows how well-documented the species is.
 3. Resolves the IUCN Red List conservation status (LC / NT / VU / EN /
-   CR / EW / EX) via GBIF's mirrored ``iucnRedListCategory`` endpoint —
-   keyed by the GBIF taxon key from step 1. (We use GBIF's mirror rather
-   than the IUCN API directly; the provenance manifest records the real
-   source as ``gbif-iucn-mirror`` accordingly.)
+   CR / EW / EX), assessment year, and population trend from the official
+   IUCN Red List API v4 (``api.iucnredlist.org``) — the species' latest
+   global assessment — when ``IUCN_REDLIST_TOKEN`` is configured. The
+   provenance manifest records the source as ``iucn-redlist-api-v4``.
 4. Flags known invasive species against a mounted GRIIS/GISD checklist
    (Darwin Core CSV or a plain species list under
    ``<REFERENCES_ROOT>/invasive/``). When no list is mounted, invasive
@@ -26,6 +26,7 @@ open eDNA tool automates this cross-referencing step.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import json
 import time
@@ -50,10 +51,12 @@ _INVASIVE_NAME_COLUMNS = ("canonicalName", "scientificName", "species", "accepte
 
 GBIF_SPECIES_MATCH_URL = "https://api.gbif.org/v1/species/match"
 GBIF_OCCURRENCE_SEARCH_URL = "https://api.gbif.org/v1/occurrence/search"
-# IUCN Red List category is read from GBIF's mirror (api.gbif.org/v1/species/
-# {key}/iucnRedListCategory), not IUCN's own API — see _iucn_lookup. The
-# provenance source is recorded as "gbif-iucn-mirror".
-CONSERVATION_SOURCE = "gbif-api-v1,gbif-iucn-mirror"
+# IUCN Red List status comes from the official IUCN Red List API v4
+# (api.iucnredlist.org) when IUCN_REDLIST_TOKEN is configured — the real
+# source, not GBIF's mirror — so category, assessment year, AND population
+# trend are all populated. The provenance source records this accordingly.
+IUCN_API_BASE = "https://api.iucnredlist.org/api/v4"
+CONSERVATION_SOURCE = "gbif-api-v1,iucn-redlist-api-v4"
 CACHE_TTL_DAYS = 30
 
 
@@ -371,32 +374,62 @@ def _gbif_lookup(
                     record.gbif_match_confidence = match_data2.get("confidence")
 
 
+def _is_global_scope(assessment: dict[str, Any]) -> bool:
+    return any(
+        (s.get("description") or {}).get("en") == "Global"
+        for s in assessment.get("scopes", [])
+    )
+
+
 def _iucn_lookup(
     record: ConservationRecord, species_name: str, token: str
 ) -> None:
-    """Query IUCN Red List status via GBIF's mirrored endpoint.
+    """Query the official IUCN Red List API v4 by scientific name.
 
-    GBIF mirrors IUCN Red List categories at
-    ``/v1/species/{key}/iucnRedListCategory``, which is more reliable
-    than IUCN's own API (which is behind Cloudflare bot protection).
-    We use this endpoint when we already have a GBIF taxon key from
-    the earlier ``_gbif_lookup`` call.
+    Resolves the species' latest *global* assessment for its Red List category
+    and publication year, then fetches the assessment detail for the population
+    trend. Uses the binomial directly (no GBIF key required), so it works even
+    when the GBIF backbone match differs.
     """
-    if not record.gbif_key:
-        return
+    parts = species_name.split()
+    if len(parts) < 2:
+        return  # IUCN assessments are per binomial; genus-only can't be resolved
 
-    with httpx.Client(timeout=15.0) as client:
-        url = f"https://api.gbif.org/v1/species/{record.gbif_key}/iucnRedListCategory"
-        resp = client.get(url)
+    genus, species = parts[0], parts[1]
+    headers = {"Authorization": token}
 
+    with httpx.Client(timeout=20.0, headers=headers) as client:
+        resp = client.get(
+            f"{IUCN_API_BASE}/taxa/scientific_name",
+            params={"genus_name": genus, "species_name": species},
+        )
         if resp.status_code == 404:
-            return
+            return  # not assessed by IUCN
         resp.raise_for_status()
-        data = resp.json()
+        assessments = resp.json().get("assessments", [])
+        if not assessments:
+            return
 
-        code = data.get("code", "")
-        category_full = data.get("category", "")
+        # Prefer the latest global assessment; fall back to any latest, then first.
+        chosen = next(
+            (a for a in assessments if a.get("latest") and _is_global_scope(a)),
+            next((a for a in assessments if a.get("latest")), assessments[0]),
+        )
 
+        code = chosen.get("red_list_category_code")
         if code:
             record.iucn_category = code
-            record.iucn_category_full = IUCN_CATEGORY_MAP.get(code, category_full)
+            record.iucn_category_full = IUCN_CATEGORY_MAP.get(code, code)
+
+        year = chosen.get("year_published")
+        if year:
+            with contextlib.suppress(ValueError, TypeError):
+                record.iucn_assessment_year = int(year)
+
+        assessment_id = chosen.get("assessment_id")
+        if assessment_id:
+            detail = client.get(f"{IUCN_API_BASE}/assessment/{assessment_id}")
+            if detail.status_code == 200:
+                trend = detail.json().get("population_trend")
+                if isinstance(trend, dict):
+                    record.iucn_population_trend = (trend.get("description") or {}).get("en")

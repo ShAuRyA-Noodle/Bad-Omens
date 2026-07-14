@@ -153,6 +153,10 @@ download-refs-mitofish: ## Download MitoFish only.
 list-refs: ## Show available reference databases.
 	python scripts/download_references.py --list
 
+.PHONY: download-invasive
+download-invasive: ## Download the GRIIS invasive checklist (default: India). Override with COUNTRY="Sri Lanka".
+	python scripts/download_griis.py --country "$(or $(COUNTRY),India)"
+
 # ─── Cleanup ──────────────────────────────────────────────────────────
 
 .PHONY: clean
