@@ -39,4 +39,21 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split heavy third-party libs into their own chunks so the initial
+        // load isn't one 2 MB blob. Route-level React.lazy (see App.tsx) then
+        // pulls charts/map/3D only on the pages that use them.
+        manualChunks: {
+          "react-vendor": ["react", "react-dom", "react-router-dom"],
+          charts: ["recharts"],
+          three: ["three", "@react-three/fiber"],
+          map: ["leaflet", "react-leaflet"],
+          motion: ["framer-motion"],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 900,
+  },
 });
