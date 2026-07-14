@@ -274,6 +274,24 @@ export interface ProjectOrdination {
   message: string | null;
 }
 
+export interface ProjectTimePoint {
+  job_id: string;
+  event_date: string;
+  label: string;
+  eii_score: number | null;
+  eii_grade: string | null;
+  shannon: number | null;
+  richness: number | null;
+  faith_pd: number | null;
+}
+
+export interface ProjectTimeSeries {
+  n_dated: number;
+  n_undated: number;
+  points: ProjectTimePoint[];
+  message: string | null;
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────
 
 export async function signup(email: string, password: string): Promise<TokenPair> {
@@ -409,6 +427,10 @@ export async function attachJobToProject(projectId: string, jobId: string): Prom
 
 export async function getProjectOrdination(projectId: string): Promise<ProjectOrdination> {
   return apiFetch<ProjectOrdination>(`/projects/${projectId}/ordination`);
+}
+
+export async function getProjectTimeseries(projectId: string): Promise<ProjectTimeSeries> {
+  return apiFetch<ProjectTimeSeries>(`/projects/${projectId}/timeseries`);
 }
 
 export interface OrdinationPoint {

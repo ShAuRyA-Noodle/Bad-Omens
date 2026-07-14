@@ -51,3 +51,25 @@ class ProjectOrdination(BaseModel):
     proportion_explained: list[float] = []
     points: list[PcoaPoint] = []
     message: str | None = None
+
+
+class ProjectTimePoint(BaseModel):
+    """One dated sample in a project's temporal trend."""
+
+    job_id: uuid.UUID
+    event_date: str            # ISO date from the sample's Darwin Core metadata
+    label: str
+    eii_score: float | None = None
+    eii_grade: str | None = None
+    shannon: float | None = None
+    richness: int | None = None
+    faith_pd: float | None = None
+
+
+class ProjectTimeSeries(BaseModel):
+    """Ecosystem-Integrity / diversity trend across a project's dated samples."""
+
+    n_dated: int
+    n_undated: int
+    points: list[ProjectTimePoint] = []
+    message: str | None = None

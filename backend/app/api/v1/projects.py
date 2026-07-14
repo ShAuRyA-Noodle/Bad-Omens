@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.beta_diversity import bray_curtis_matrix, pcoa
-from app.db.models import ASV, JobStatus
+from app.db.models import ASV, DiversityMetric, IntegrityIndex, JobStatus, Sample
 from app.schemas.projects import (
     PcoaPoint,
     ProjectCreate,
@@ -18,6 +18,8 @@ from app.schemas.projects import (
     ProjectJob,
     ProjectOrdination,
     ProjectPublic,
+    ProjectTimePoint,
+    ProjectTimeSeries,
 )
 from app.services import projects as projects_service
 
@@ -126,3 +128,72 @@ async def project_ordination(project_id: uuid.UUID, user: CurrentUser, session: 
         proportion_explained=proportions,
         points=points,
     )
+
+
+@router.get("/{project_id}/timeseries", response_model=ProjectTimeSeries, summary="Temporal trend across dated samples")
+async def project_timeseries(project_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> ProjectTimeSeries:
+    """Ecosystem-Integrity + diversity over time for a project's completed samples.
+
+    Each completed job whose sample carries a Darwin Core ``eventDate`` becomes
+    one point on the timeline, ordered by date. Samples without an eventDate are
+    counted but excluded (a trend needs real collection dates) — never invented.
+    """
+    project = await projects_service.get_project(session, user=user, project_id=project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    succeeded = [j for j in project.jobs if j.status == JobStatus.SUCCEEDED]
+    if not succeeded:
+        return ProjectTimeSeries(n_dated=0, n_undated=0, message="No completed samples yet.")
+
+    job_ids = [j.id for j in succeeded]
+
+    # sample (eventDate) per job, diversity per sample, EII per job — three
+    # scoped lookups keyed off the project's completed jobs.
+    sample_rows = await session.execute(
+        select(Sample.job_id, Sample.id, Sample.dwc_metadata).where(Sample.job_id.in_(job_ids))
+    )
+    job_to_sample: dict[uuid.UUID, uuid.UUID] = {}
+    job_to_date: dict[uuid.UUID, str] = {}
+    for job_id, sample_id, dwc in sample_rows:
+        if job_id in job_to_sample:
+            continue  # first sample per job
+        job_to_sample[job_id] = sample_id
+        event_date = (dwc or {}).get("eventDate") if isinstance(dwc, dict) else None
+        if isinstance(event_date, str) and event_date.strip():
+            job_to_date[job_id] = event_date.strip()
+
+    sample_ids = list(job_to_sample.values())
+    div_rows = await session.execute(
+        select(DiversityMetric.sample_id, DiversityMetric.shannon, DiversityMetric.richness, DiversityMetric.faith_pd)
+        .where(DiversityMetric.sample_id.in_(sample_ids))
+    ) if sample_ids else []
+    div_by_sample: dict[uuid.UUID, tuple[float | None, int | None, float | None]] = {
+        sid: (sh, rich, fp) for sid, sh, rich, fp in div_rows
+    }
+
+    eii_rows = await session.execute(
+        select(IntegrityIndex.job_id, IntegrityIndex.score, IntegrityIndex.grade).where(IntegrityIndex.job_id.in_(job_ids))
+    )
+    eii_by_job: dict[uuid.UUID, tuple[float | None, str | None]] = {
+        jid: (score, grade) for jid, score, grade in eii_rows
+    }
+
+    points: list[ProjectTimePoint] = []
+    for jid in job_ids:
+        date = job_to_date.get(jid)
+        if date is None:
+            continue
+        sh, rich, fp = div_by_sample.get(job_to_sample.get(jid), (None, None, None))  # type: ignore[arg-type]
+        score, grade = eii_by_job.get(jid, (None, None))
+        points.append(ProjectTimePoint(
+            job_id=jid, event_date=date, label=jid.hex[:8],
+            eii_score=score, eii_grade=grade, shannon=sh, richness=rich, faith_pd=fp,
+        ))
+
+    points.sort(key=lambda p: p.event_date)  # ISO dates sort chronologically
+    n_undated = len(succeeded) - len(points)
+    msg = None
+    if not points:
+        msg = "No completed samples have a collection date yet. Add an eventDate when uploading to build a trend."
+    return ProjectTimeSeries(n_dated=len(points), n_undated=n_undated, points=points, message=msg)

@@ -2,11 +2,12 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis,
+  LineChart, Line, Legend,
 } from "recharts";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { getProject, getProjectOrdination } from "@/lib/api";
-import { ArrowLeft, ChevronRight, GitCompareArrows } from "lucide-react";
+import { getProject, getProjectOrdination, getProjectTimeseries } from "@/lib/api";
+import { ArrowLeft, ChevronRight, GitCompareArrows, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STATUS_CLS: Record<string, string> = {
@@ -28,6 +29,12 @@ export default function ProjectDetail() {
   const { data: ord } = useQuery({
     queryKey: ["project-ordination", projectId],
     queryFn: () => getProjectOrdination(projectId!),
+    enabled: !!projectId,
+    retry: false,
+  });
+  const { data: trend } = useQuery({
+    queryKey: ["project-timeseries", projectId],
+    queryFn: () => getProjectTimeseries(projectId!),
     enabled: !!projectId,
     retry: false,
   });
@@ -98,6 +105,50 @@ export default function ProjectDetail() {
               <div className="h-40 animate-pulse bg-black/40" />
             )}
           </div>
+
+          {/* Temporal trend — EII + diversity over collection dates */}
+          {trend && (trend.points.length > 0 || (trend.n_undated ?? 0) > 0) && (
+            <div className="border border-white/15 bg-black/60 backdrop-blur-md hud-bracket mb-6 p-4 sm:p-6">
+              <div className="flex items-center justify-between text-[11px] text-gray-500 mb-4 border-b border-white/10 pb-2 uppercase tracking-widest">
+                <span className="flex items-center gap-2"><TrendingUp className="w-3.5 h-3.5" /> Temporal Trend · EII + Diversity over time</span>
+                {trend.n_undated > 0 && <span className="text-gray-600">{trend.n_undated} undated</span>}
+              </div>
+              {trend.points.length >= 2 ? (
+                <>
+                  <div className="h-72 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={trend.points} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
+                        <CartesianGrid stroke="rgba(255,255,255,0.08)" />
+                        <XAxis dataKey="event_date" tick={{ fill: "#9ca3af", fontSize: 10 }} stroke="rgba(255,255,255,0.2)" />
+                        <YAxis yAxisId="eii" domain={[0, 100]} tick={{ fill: "#39ff14", fontSize: 10 }} stroke="rgba(57,255,20,0.3)"
+                          label={{ value: "EII", angle: -90, position: "insideLeft", fill: "#39ff14", fontSize: 11 }} />
+                        <YAxis yAxisId="div" orientation="right" tick={{ fill: "#00f0ff", fontSize: 10 }} stroke="rgba(0,240,255,0.3)"
+                          label={{ value: "Shannon", angle: 90, position: "insideRight", fill: "#00f0ff", fontSize: 11 }} />
+                        <Tooltip
+                          contentStyle={{ background: "#000", border: "1px solid rgba(255,255,255,0.2)", fontFamily: "monospace", fontSize: 11 }}
+                          labelStyle={{ color: "#9ca3af" }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 11, fontFamily: "monospace" }} />
+                        <Line yAxisId="eii" type="monotone" dataKey="eii_score" name="EII" stroke="#39ff14" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <Line yAxisId="div" type="monotone" dataKey="shannon" name="Shannon" stroke="#00f0ff" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <Line yAxisId="div" type="monotone" dataKey="faith_pd" name="Faith's PD" stroke="#c084fc" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2 }} connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-2">
+                    Ecosystem Integrity Index and diversity across this project's dated samples. Repeat-survey a
+                    site over time to read its trajectory.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-400 py-6 text-center">
+                  {trend.points.length === 1
+                    ? "Only one dated sample so far — add another survey date to plot a trend."
+                    : (trend.message ?? "Add a collection date (eventDate) at upload to build a trend.")}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Samples */}
           <div className="border border-white/15 bg-black/60 backdrop-blur-md hud-bracket">
