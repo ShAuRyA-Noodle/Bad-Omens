@@ -81,6 +81,14 @@ export const Header = () => {
         <div className="hidden md:flex items-center space-x-3">
           {authed && (
             <Link
+              to="/projects"
+              className="text-xs text-gray-400 hover:text-neon-cyan flex items-center border border-white/15 px-3 py-2 uppercase tracking-wider transition-colors"
+            >
+              PROJECTS
+            </Link>
+          )}
+          {authed && (
+            <Link
               to="/profile"
               title="Account"
               className="text-xs text-gray-400 hover:text-neon-cyan flex items-center border border-white/15 px-3 py-2 uppercase tracking-wider transition-colors"
@@ -136,6 +144,15 @@ export const Header = () => {
                 </Link>
               ))}
               <div className="pt-4 border-t border-white/10 space-y-3">
+                {authed && (
+                  <Link
+                    to="/projects"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-gray-400 w-full flex items-center justify-center gap-2 border border-white/15 py-3 hover:text-neon-cyan"
+                  >
+                    PROJECTS
+                  </Link>
+                )}
                 {authed && (
                   <Link
                     to="/profile"

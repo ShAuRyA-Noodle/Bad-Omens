@@ -236,6 +236,41 @@ export interface IntegrityIndex {
   components: EIIComponent[];
 }
 
+export interface ProjectPublic {
+  id: string;
+  name: string;
+  description: string | null;
+  job_count: number;
+  succeeded_count: number;
+  created_at: string;
+}
+
+export interface ProjectJobItem {
+  id: string;
+  status: string;
+  amplicon: string;
+  created_at: string;
+}
+
+export interface ProjectDetail extends ProjectPublic {
+  jobs: ProjectJobItem[];
+}
+
+export interface PcoaPoint {
+  job_id: string;
+  label: string;
+  pc1: number;
+  pc2: number;
+  pc3: number;
+}
+
+export interface ProjectOrdination {
+  n_samples: number;
+  proportion_explained: number[];
+  points: PcoaPoint[];
+  message: string | null;
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────
 
 export async function signup(email: string, password: string): Promise<TokenPair> {
@@ -341,6 +376,32 @@ export async function getJobProvenance(jobId: string): Promise<ProvenanceManifes
 
 export async function getJobIntegrity(jobId: string): Promise<IntegrityIndex> {
   return apiFetch<IntegrityIndex>(`/jobs/${jobId}/integrity`);
+}
+
+// ─── Projects (multi-sample studies) ────────────────────────────────
+
+export async function listProjects(): Promise<ProjectPublic[]> {
+  return apiFetch<ProjectPublic[]>("/projects");
+}
+
+export async function createProject(name: string, description?: string): Promise<ProjectPublic> {
+  return apiFetch<ProjectPublic>("/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, description: description || null }),
+  });
+}
+
+export async function getProject(projectId: string): Promise<ProjectDetail> {
+  return apiFetch<ProjectDetail>(`/projects/${projectId}`);
+}
+
+export async function attachJobToProject(projectId: string, jobId: string): Promise<ProjectDetail> {
+  return apiFetch<ProjectDetail>(`/projects/${projectId}/jobs/${jobId}`, { method: "POST" });
+}
+
+export async function getProjectOrdination(projectId: string): Promise<ProjectOrdination> {
+  return apiFetch<ProjectOrdination>(`/projects/${projectId}/ordination`);
 }
 
 export interface OrdinationPoint {

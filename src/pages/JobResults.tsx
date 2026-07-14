@@ -8,6 +8,7 @@ import { IntegrityMatrix } from "@/components/IntegrityMatrix";
 import { CompositionMap } from "@/components/CompositionMap";
 import { ThreatenedSpotlight } from "@/components/ThreatenedSpotlight";
 import { SampleMap } from "@/components/SampleMap";
+import { AddToProject } from "@/components/AddToProject";
 import { cn } from "@/lib/utils";
 import {
   getJobSummary,
@@ -116,9 +117,12 @@ export default function JobResults() {
               <p className="text-xs text-gray-500 mt-2 break-all">JOB_ID: {jobId}</p>
             </div>
             {job && (
-              <span className={cn("border px-3 py-1.5 text-xs uppercase tracking-wider shrink-0 self-start sm:self-auto", statusStyle)}>
-                {job.status}{job.pipeline_version ? ` · v${job.pipeline_version}` : ""}
-              </span>
+              <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
+                <span className={cn("border px-3 py-1.5 text-xs uppercase tracking-wider", statusStyle)}>
+                  {job.status}{job.pipeline_version ? ` · v${job.pipeline_version}` : ""}
+                </span>
+                <AddToProject jobId={jobId} />
+              </div>
             )}
           </div>
 
