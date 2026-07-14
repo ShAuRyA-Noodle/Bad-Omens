@@ -381,6 +381,23 @@ def run_job(job_id: str) -> dict[str, str]:
                 stage_results.append(phylo_result.to_dict())
                 faith_pd = phylo_result.metrics.get("faith_pd")
                 div_result.metrics["faith_pd"] = faith_pd
+
+                # Persist the Newick tree so it can be rendered / cited later,
+                # instead of being deleted with the workspace.
+                for pf in phylo_result.output_files:
+                    if pf.endswith("phylo.json") and Path(pf).exists():
+                        pj = json.loads(Path(pf).read_text())
+                        newick = pj.get("tree_newick")
+                        if newick:
+                            from app.db.models import PhyloTree
+                            session.add(PhyloTree(
+                                job_id=job.id,
+                                method="mafft+fasttree",
+                                n_tips=int(pj.get("n_tips") or 0),
+                                faith_pd=faith_pd,
+                                newick=newick,
+                            ))
+                        break
                 if faith_pd is not None:
                     _emit(uid, "stage.completed", f"Phylogeny done — Faith's PD={round(faith_pd, 3)}", stage="phylogeny", progress=0.875)
                 else:

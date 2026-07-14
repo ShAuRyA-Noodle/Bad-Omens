@@ -175,6 +175,14 @@ export interface DiversityPublic {
   evenness: number | null;
 }
 
+export interface PhyloTree {
+  job_id: string;
+  method: string;
+  n_tips: number;
+  faith_pd: number | null;
+  newick: string;
+}
+
 export interface ConservationRecord {
   id: string;
   species: string;
@@ -411,6 +419,10 @@ export async function getJobASVs(jobId: string): Promise<ASVWithTaxon[]> {
 
 export async function getJobDiversity(jobId: string): Promise<DiversityPublic | null> {
   return apiFetch<DiversityPublic | null>(`/jobs/${jobId}/diversity`);
+}
+
+export async function getJobTree(jobId: string): Promise<PhyloTree | null> {
+  return apiFetch<PhyloTree | null>(`/jobs/${jobId}/tree`);
 }
 
 export async function getJobConservation(jobId: string): Promise<ConservationSummary> {

@@ -23,6 +23,7 @@ from app.db.models import (
     Job,
     JobStatus,
     OrdinationResult,
+    PhyloTree,
     Provenance,
     Sample,
 )
@@ -36,6 +37,7 @@ from app.schemas.results import (
     JobResultsSummary,
     OrdinationPoint,
     OrdinationResponse,
+    PhyloTreePublic,
     TaxonPublic,
 )
 
@@ -167,6 +169,23 @@ async def job_diversity(
         return None
 
     return DiversityPublic.model_validate(dm)
+
+
+@router.get(
+    "/tree",
+    response_model=PhyloTreePublic | None,
+    summary="De-novo phylogenetic tree (Newick) for this job's ASVs",
+)
+async def job_tree(
+    job_id: uuid.UUID,
+    user: CurrentUser,
+    session: SessionDep,
+) -> PhyloTreePublic | None:
+    job = await _get_succeeded_job(session, job_id, user)
+    tree = await session.scalar(select(PhyloTree).where(PhyloTree.job_id == job.id))
+    if tree is None:
+        return None
+    return PhyloTreePublic.model_validate(tree)
 
 
 @router.get(

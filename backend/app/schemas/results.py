@@ -61,6 +61,16 @@ class DiversityPublic(BaseModel):
     evenness: float | None
 
 
+class PhyloTreePublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: uuid.UUID
+    method: str
+    n_tips: int
+    faith_pd: float | None
+    newick: str
+
+
 class OrdinationPoint(BaseModel):
     asv_id: str
     x: float

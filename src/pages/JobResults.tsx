@@ -26,7 +26,8 @@ import {
   type ProvenanceManifest,
   type JobResultsSummary,
 } from "@/lib/api";
-import { Download, Shield, Dna, BarChart3, FileCheck, ArrowLeft } from "lucide-react";
+import { Download, Shield, Dna, BarChart3, FileCheck, ArrowLeft, Trees } from "lucide-react";
+import { PhyloTreeView } from "@/components/PhyloTreeView";
 
 const IUCN_COLORS: Record<string, string> = {
   EX: "bg-black text-white border border-white/40",
@@ -151,10 +152,11 @@ export default function JobResults() {
 
           {succeeded && (
             <Tabs defaultValue="overview" className="space-y-6">
-              <TabsList className="grid grid-cols-3 sm:grid-cols-5 w-full h-auto gap-1 bg-black/40 border border-white/10 p-1">
+              <TabsList className="grid grid-cols-3 sm:grid-cols-6 w-full h-auto gap-1 bg-black/40 border border-white/10 p-1">
                 {[
                   { v: "overview", icon: BarChart3, label: "Overview" },
                   { v: "asvs", icon: Dna, label: "ASVs" },
+                  { v: "phylogeny", icon: Trees, label: "Phylogeny" },
                   { v: "conservation", icon: Shield, label: "Conservation" },
                   { v: "provenance", icon: FileCheck, label: "Provenance" },
                   { v: "export", icon: Download, label: "Export" },
@@ -175,6 +177,7 @@ export default function JobResults() {
                 <CompositionMap jobId={jobId} enabled={succeeded} />
               </TabsContent>
               <TabsContent value="asvs">{asvsLoading || !asvs ? <Loading label="Loading ASVs" /> : <ASVsTab asvs={asvs} total={summary?.n_asvs} />}</TabsContent>
+              <TabsContent value="phylogeny">{succeeded ? <PhyloTreeView jobId={jobId} /> : <Loading label="Building tree" />}</TabsContent>
               <TabsContent value="conservation">{consLoading || !conservation ? <Loading label="Cross-referencing GBIF/IUCN" /> : <ConservationTab data={conservation} />}</TabsContent>
               <TabsContent value="provenance">{provLoading || !provenance ? <Loading label="Loading manifest" /> : <ProvenanceTab data={provenance} />}</TabsContent>
               <TabsContent value="export"><ExportTab jobId={jobId} /></TabsContent>

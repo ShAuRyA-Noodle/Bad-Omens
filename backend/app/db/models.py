@@ -431,6 +431,30 @@ class DiversityMetric(UUIDPrimaryKey, Timestamped, Base):
     sample: Mapped[Sample] = relationship("Sample", back_populates="diversity_metric")
 
 
+class PhyloTree(UUIDPrimaryKey, Timestamped, Base):
+    """De-novo phylogenetic tree (Newick) built from a job's ASVs.
+
+    The phylogeny stage (MAFFT + FastTree) produces this tree and Faith's PD is
+    computed from it. The Newick is persisted here — instead of being discarded
+    with the workspace — so the tree can be rendered in the UI and cited as a
+    figure. Tip labels are ASV ids (sequence-hash-derived), joinable to the
+    job's ASVs/taxa for colouring.
+    """
+
+    __tablename__ = "phylo_trees"
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    method: Mapped[str] = mapped_column(String(32), nullable=False, default="mafft+fasttree")
+    n_tips: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    faith_pd: Mapped[float | None] = mapped_column(Float)
+    newick: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 # ─── Conservation cache ─────────────────────────────────────────────────
 
 
@@ -615,6 +639,7 @@ __all__ = [
     "Job",
     "JobStatus",
     "OrdinationResult",
+    "PhyloTree",
     "Project",
     "ProjectOrdinationResult",
     "Provenance",
