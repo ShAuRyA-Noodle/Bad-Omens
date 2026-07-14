@@ -21,6 +21,7 @@ Usage::
 
 Exit code 0 = verified, 1 = verification failed.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,7 +36,9 @@ from app.core import manifest as manifest_core
 from app.core import signing as crypto
 
 
-def _load_public_key(args: argparse.Namespace, manifest: dict[str, Any]) -> tuple[bytes | None, str]:
+def _load_public_key(
+    args: argparse.Namespace, manifest: dict[str, Any]
+) -> tuple[bytes | None, str]:
     """Return (public_key_raw, source_description)."""
     if args.public_key_b64:
         return base64.b64decode(args.public_key_b64), "command line"
@@ -45,7 +48,9 @@ def _load_public_key(args: argparse.Namespace, manifest: dict[str, Any]) -> tupl
         return base64.b64decode(data["public_key_b64"]), f"URL {args.public_key_url}"
     embedded = manifest.get("public_key")
     if isinstance(embedded, dict) and embedded.get("key_b64"):
-        return base64.b64decode(embedded["key_b64"]), "manifest (embedded — not independently trusted)"
+        return base64.b64decode(
+            embedded["key_b64"]
+        ), "manifest (embedded — not independently trusted)"
     return None, "none"
 
 
@@ -53,7 +58,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify a Relict provenance manifest offline.")
     parser.add_argument("manifest", type=Path, help="Path to provenance.json")
     parser.add_argument("--public-key-b64", help="Raw Ed25519 public key, base64")
-    parser.add_argument("--public-key-url", help="URL returning {public_key_b64: ...} (e.g. /public-key)")
+    parser.add_argument(
+        "--public-key-url", help="URL returning {public_key_b64: ...} (e.g. /public-key)"
+    )
     args = parser.parse_args(argv)
 
     manifest = json.loads(args.manifest.read_text())
@@ -72,14 +79,18 @@ def main(argv: list[str] | None = None) -> int:
         sig_ok = crypto.verify(public_key, manifest_core.canonical_bytes(manifest), signature)
 
     print(f"manifest:        {args.manifest}")
-    print(f"content hash:    {'OK' if content_ok else 'MISMATCH'}  (computed {computed[:16]}…, claimed {str(claimed)[:16]}…)")
+    print(
+        f"content hash:    {'OK' if content_ok else 'MISMATCH'}  (computed {computed[:16]}…, claimed {str(claimed)[:16]}…)"
+    )
     print(f"public key:      {source}")
     print(f"signature:       {'OK' if sig_ok else 'INVALID/MISSING'}")
     verified = content_ok and sig_ok
     print(f"\nRESULT:          {'VERIFIED' if verified else 'NOT VERIFIED'}")
     if source.startswith("manifest") and verified:
-        print("NOTE: verified against the manifest's embedded key. Re-run with "
-              "--public-key-url to confirm it was signed by the expected server.")
+        print(
+            "NOTE: verified against the manifest's embedded key. Re-run with "
+            "--public-key-url to confirm it was signed by the expected server."
+        )
     return 0 if verified else 1
 
 
