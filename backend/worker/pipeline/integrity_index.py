@@ -142,6 +142,17 @@ def _distinctness_score(
     return _clamp01(score), f"mean GBIF rarity over {len(occs)} species"
 
 
+def _sampling_adequacy_score(*, goods_coverage: float | None) -> tuple[float | None, str]:
+    """Good's coverage of the sequencing depth (see coverage.py).
+
+    C = 1 − F1/N; higher means the sample was sequenced deeply enough that few
+    taxa were seen only once. Unavailable when no coverage was computed.
+    """
+    if goods_coverage is None:
+        return None, "no coverage computed (read counts unavailable)"
+    return _clamp01(goods_coverage), "Good's coverage C = 1 − F1/N"
+
+
 def _invasive_pressure_score(
     *, records: list[dict[str, Any]], invasive_list_loaded: bool
 ) -> tuple[float | None, str]:
@@ -168,6 +179,7 @@ def compute_eii(
     conservation_records: list[dict[str, Any]] | None,
     api_degraded: bool,
     invasive_list_loaded: bool = False,
+    goods_coverage: float | None = None,
 ) -> EIIResult:
     """Compute the EII from real per-run signals. Pure & deterministic."""
     records = conservation_records or []
@@ -180,6 +192,7 @@ def compute_eii(
     iv_val, iv_detail = _invasive_pressure_score(
         records=records, invasive_list_loaded=invasive_list_loaded
     )
+    sa_val, sa_detail = _sampling_adequacy_score(goods_coverage=goods_coverage)
 
     components = [
         EIIComponent(
@@ -201,15 +214,10 @@ def compute_eii(
             weight=WEIGHTS["invasive_pressure"],
             available=iv_val is not None, value=iv_val, detail=iv_detail,
         ),
-        # Pending — never defaulted; weight is removed from the denominator
-        # until it ships (see methodology Limitations). Sampling adequacy needs
-        # a rarefaction estimator; the ASV table has singletons removed upstream
-        # (vsearch --minuniquesize 2), so a Good's-coverage proxy would be a
-        # degenerate constant — deliberately not faked.
         EIIComponent(
             key="sampling_adequacy", name="Sampling adequacy",
-            weight=WEIGHTS["sampling_adequacy"], available=False,
-            detail="not assessed — needs a rarefaction estimator (singletons removed upstream)",
+            weight=WEIGHTS["sampling_adequacy"],
+            available=sa_val is not None, value=sa_val, detail=sa_detail,
         ),
     ]
 

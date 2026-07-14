@@ -18,6 +18,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from worker.pipeline import coverage as coverage_stage
 from worker.pipeline import denoise_vsearch as denoise_stage
 from worker.pipeline import dereplicate as derep_stage
 from worker.pipeline import diversity as diversity_stage
@@ -72,6 +73,10 @@ def main() -> int:
         print(f"[smoke] primer_trim: reads_after={pt.metrics.get('reads_after_trimming')}")
         primer_fastq = Path(pt.output_files[0])
 
+        cov = coverage_stage.run(ws, primer_fastq, logger=None)
+        print(f"[smoke] coverage: goods_coverage={cov.metrics.get('goods_coverage')} "
+              f"singletons={cov.metrics.get('n_singletons')}/{cov.metrics.get('n_reads')}")
+
         dr = derep_stage.run(ws, primer_fastq, logger=None)
         print(f"[smoke] derep: {dr.metrics}")
         unique = Path(dr.output_files[0])
@@ -95,6 +100,7 @@ def main() -> int:
             evenness=dv.metrics.get("evenness"),
             conservation_records=[],
             api_degraded=False,
+            goods_coverage=cov.metrics.get("goods_coverage"),
         )
         print(f"[smoke] EII: grade={eii.grade} score={eii.score} assessed_weight={eii.assessed_weight}")
 

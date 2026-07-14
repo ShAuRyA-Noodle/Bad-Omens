@@ -108,6 +108,31 @@ def test_invasive_pressure_unavailable_without_list() -> None:
     assert "no invasive checklist" in by_key["invasive_pressure"].detail
 
 
+def test_sampling_adequacy_assessed_from_goods_coverage() -> None:
+    result = eii.compute_eii(
+        richness=5, shannon=math.log(5), evenness=1.0,
+        conservation_records=[], api_degraded=False, goods_coverage=0.9,
+    )
+    by_key = {c.key: c for c in result.components}
+    assert by_key["sampling_adequacy"].available is True
+    assert by_key["sampling_adequacy"].value == pytest.approx(0.9)
+    # evenness(0.20) + sampling_adequacy(0.20) both count even with no taxonomy.
+    assert result.assessed_weight == pytest.approx(0.40)
+
+
+def test_all_five_components_reach_full_weight() -> None:
+    # A fully-assessed sample: evenness + health + distinctness + invasive +
+    # sampling adequacy = 1.0 assessed weight (assessed_weight -> 1.0 goal).
+    records = [{"species": "sp", "iucn_category": "LC", "gbif_occurrence_count": 1000, "is_invasive": False}]
+    result = eii.compute_eii(
+        richness=5, shannon=math.log(5), evenness=1.0,
+        conservation_records=records, api_degraded=False,
+        invasive_list_loaded=True, goods_coverage=0.95,
+    )
+    assert result.assessed_weight == pytest.approx(1.0)
+    assert all(c.available for c in result.components)
+
+
 def test_deterministic() -> None:
     records = [{"species": "a", "iucn_category": "VU", "gbif_occurrence_count": 500}]
     a = eii.compute_eii(

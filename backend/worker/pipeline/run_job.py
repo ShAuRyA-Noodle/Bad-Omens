@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session
 from worker import PIPELINE_VERSION, TOOL_VERSIONS
 from worker.pipeline import StageError
 from worker.pipeline import conservation as conservation_stage
+from worker.pipeline import coverage as coverage_stage
 from worker.pipeline import denoise_vsearch as denoise_stage
 from worker.pipeline import dereplicate as derep_stage
 from worker.pipeline import diversity as diversity_stage
@@ -289,6 +290,15 @@ def run_job(job_id: str) -> dict[str, str]:
             primer_fastq = Path(primer_result.output_files[0])
             _emit(uid, "stage.completed", f"Primers trimmed — {primer_result.metrics.get('reads_after_trimming', '?')} reads", stage="primer_trim", progress=0.24)
 
+            # ─── Stage 2a: Sampling adequacy (Good's coverage) ────────
+            # Singleton-preserving dereplication of the trimmed reads. Feeds the
+            # EII sampling-adequacy component; separate from ASV inference.
+            _emit(uid, "stage.started", "Estimating sampling adequacy (Good's coverage)", stage="coverage", progress=0.245)
+            coverage_result = coverage_stage.run(workspace, primer_fastq, logger=log)
+            stage_results.append(coverage_result.to_dict())
+            goods_coverage = coverage_result.metrics.get("goods_coverage")
+            _emit(uid, "stage.completed", f"Sampling adequacy — Good's coverage {goods_coverage if goods_coverage is not None else 'n/a'}", stage="coverage", progress=0.248)
+
             # ─── Stage 2: Dereplication ───────────────────────────────
             _emit(uid, "stage.started", "Dereplicating sequences", stage="derep", progress=0.25)
             derep_result = derep_stage.run(workspace, primer_fastq, logger=log)
@@ -428,6 +438,7 @@ def run_job(job_id: str) -> dict[str, str]:
                 conservation_records=cons_records,
                 api_degraded=api_degraded,
                 invasive_list_loaded=invasive_list_loaded,
+                goods_coverage=goods_coverage,
             )
             stage_results.append({
                 "stage": "integrity_index",
