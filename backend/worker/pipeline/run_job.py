@@ -264,11 +264,19 @@ def run_job(job_id: str) -> dict[str, str]:
             _emit(uid, "stage.started", "Downloading sample from storage", stage="download")
             _download_sample_from_minio(sample.s3_key, raw_fastq)
             _guard_decompression_bomb(raw_fastq, get_settings().MAX_DECOMPRESSED_BYTES)
+
+            # Paired-end: pull the R2 mate too so QC can merge the pairs.
+            raw_fastq_r2: Path | None = None
+            if sample.s3_key_r2:
+                raw_fastq_r2 = workspace / (sample.filename_r2 or "reads_R2.fastq")
+                _download_sample_from_minio(sample.s3_key_r2, raw_fastq_r2)
+                _guard_decompression_bomb(raw_fastq_r2, get_settings().MAX_DECOMPRESSED_BYTES)
             _emit(uid, "stage.completed", "Sample downloaded", stage="download", progress=0.05)
 
             # ─── Stage 1: QC ──────────────────────────────────────────
-            _emit(uid, "stage.started", "Quality control (fastp)", stage="qc", progress=0.10)
-            qc_result = qc_stage.run(workspace, raw_fastq, logger=log)
+            qc_msg = "Quality control + pair merge (fastp)" if raw_fastq_r2 else "Quality control (fastp)"
+            _emit(uid, "stage.started", qc_msg, stage="qc", progress=0.10)
+            qc_result = qc_stage.run(workspace, raw_fastq, logger=log, input_fastq_r2=raw_fastq_r2)
             stage_results.append(qc_result.to_dict())
             trimmed_fastq = Path(qc_result.output_files[0])
             _emit(uid, "stage.completed", f"QC done — {qc_result.metrics.get('reads_after_filtering', '?')} reads passed", stage="qc", progress=0.20)

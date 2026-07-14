@@ -277,6 +277,14 @@ class Sample(UUIDPrimaryKey, Timestamped, Base):
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     content_type: Mapped[str] = mapped_column(String(128), nullable=False)
 
+    # Optional reverse-reads mate for paired-end (Illumina R2). When present the
+    # QC stage merges R1+R2 with fastp before the rest of the pipeline runs.
+    # NULL for single-end uploads, which stay the common case.
+    filename_r2: Mapped[str | None] = mapped_column(String(512))
+    s3_key_r2: Mapped[str | None] = mapped_column(String(512), unique=True)
+    sha256_r2: Mapped[str | None] = mapped_column(String(64), index=True)
+    size_bytes_r2: Mapped[int | None] = mapped_column(BigInteger)
+
     # Bioinformatics metadata populated in later phases.
     num_reads: Mapped[int | None] = mapped_column(Integer)
     read_length_mean: Mapped[float | None] = mapped_column(Float)

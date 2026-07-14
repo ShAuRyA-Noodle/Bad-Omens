@@ -6,8 +6,14 @@ Takes the raw uploaded FASTQ, runs fastp to:
   - Remove reads shorter than a minimum length
   - Generate a JSON report with QC statistics
 
+Paired-end mode: when a reverse-reads file (R2) is supplied, fastp merges each
+overlapping R1/R2 pair into a single, higher-quality consensus read
+(``--merge``) after QC. Amplicon reads are expected to overlap, so only the
+merged reads flow downstream; non-overlapping pairs are dropped (not written).
+Single-end input skips merging entirely.
+
 Outputs:
-  workspace/qc/trimmed.fastq   — QC-passed reads
+  workspace/qc/trimmed.fastq   — QC-passed reads (merged reads in paired mode)
   workspace/qc/fastp.json      — machine-readable QC report
   workspace/qc/fastp.html      — human-readable QC report
 """
@@ -43,8 +49,13 @@ def run(
     input_fastq: Path,
     params: QCParams | None = None,
     logger: Any = None,
+    input_fastq_r2: Path | None = None,
 ) -> StageResult:
-    """Run fastp on ``input_fastq`` and write trimmed reads to ``workspace/qc/``."""
+    """Run fastp on ``input_fastq`` and write trimmed reads to ``workspace/qc/``.
+
+    If ``input_fastq_r2`` is given, run in paired-end merge mode: fastp aligns
+    the overlap of each R1/R2 pair and emits a single merged read per pair.
+    """
     if params is None:
         params = QCParams()
 
@@ -53,10 +64,11 @@ def run(
     report_json = stage_dir / "fastp.json"
     report_html = stage_dir / "fastp.html"
 
+    paired = input_fastq_r2 is not None
+
     cmd = [
         "fastp",
         "--in1", str(input_fastq),
-        "--out1", str(trimmed),
         "--json", str(report_json),
         "--html", str(report_html),
         "--qualified_quality_phred", str(params.min_quality),
@@ -65,6 +77,17 @@ def run(
         "--cut_window_size", str(params.cut_window_size),
         "--cut_mean_quality", str(params.cut_mean_quality),
     ]
+
+    if paired:
+        # Merge overlapping pairs into one consensus read; only merged reads are
+        # kept (amplicon reads overlap). ``--merged_out`` is the downstream input.
+        cmd.extend([
+            "--in2", str(input_fastq_r2),
+            "--merge",
+            "--merged_out", str(trimmed),
+        ])
+    else:
+        cmd.extend(["--out1", str(trimmed)])
 
     if params.max_length > 0:
         cmd.extend(["--length_limit", str(params.max_length)])
@@ -76,7 +99,7 @@ def run(
         cmd.append("--dedup")
 
     if logger:
-        logger.info("qc.started", cmd=" ".join(cmd))
+        logger.info("qc.started", cmd=" ".join(cmd), paired=paired)
 
     with StageTimer() as timer:
         result = subprocess.run(
@@ -101,20 +124,27 @@ def run(
         )
 
     metrics = _parse_fastp_json(report_json)
+    metrics["paired_end"] = paired
     if logger:
         logger.info(
             "qc.completed",
             reads_before=metrics.get("reads_before_filtering"),
             reads_after=metrics.get("reads_after_filtering"),
+            paired=paired,
+            merged_reads=metrics.get("merged_reads"),
             runtime=round(timer.elapsed, 2),
         )
+
+    input_files = [str(input_fastq)]
+    if input_fastq_r2 is not None:
+        input_files.append(str(input_fastq_r2))
 
     return StageResult(
         stage_name="qc",
         tool="fastp",
         tool_version=TOOL_VERSIONS["fastp"],
         runtime_seconds=timer.elapsed,
-        input_files=[str(input_fastq)],
+        input_files=input_files,
         output_files=[str(trimmed), str(report_json), str(report_html)],
         metrics=metrics,
     )
@@ -129,8 +159,11 @@ def _parse_fastp_json(path: Path) -> dict[str, Any]:
     before = summary.get("before_filtering", {})
     after = summary.get("after_filtering", {})
     filtering = data.get("filtering_result", {})
+    # Present only in paired merge runs; fastp records how many pairs merged.
+    merged = data.get("merged_and_filtered", {})
 
     return {
+        "merged_reads": merged.get("total_reads"),
         "reads_before_filtering": before.get("total_reads", 0),
         "reads_after_filtering": after.get("total_reads", 0),
         "bases_before_filtering": before.get("total_bases", 0),

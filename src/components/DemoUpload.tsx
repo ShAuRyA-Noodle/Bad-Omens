@@ -102,30 +102,47 @@ export const DemoUpload = () => {
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
-      const file = acceptedFiles[0];
-      if (!file) return;
+      if (acceptedFiles.length === 0) return;
 
-      setUploadedFile(file);
+      // Paired-end: if two files are dropped, sort them into forward (R1) and
+      // reverse (R2) mates by the standard Illumina naming convention. A single
+      // file is treated as single-end. More than two is rejected.
+      let r1 = acceptedFiles[0];
+      let r2: File | null = null;
+      if (acceptedFiles.length >= 2) {
+        const [a, b] = acceptedFiles;
+        const isR2 = (n: string) => /(_|\.)r2(_|\.)|_2\.(fastq|fq|fasta|fa|fna)/i.test(n);
+        if (isR2(b.name) && !isR2(a.name)) { r1 = a; r2 = b; }
+        else if (isR2(a.name) && !isR2(b.name)) { r1 = b; r2 = a; }
+        else { // ambiguous — fall back to alphabetical (R1 sorts before R2)
+          const [first, second] = [a, b].sort((x, y) => x.name.localeCompare(y.name));
+          r1 = first; r2 = second;
+        }
+      }
+
+      setUploadedFile(r1);
       setIsProcessing(true);
       setUploadProgress(5);
       setError(null);
       setJobId(null);
       setJobStatus("");
-      setStageMessage("Uploading sequence array...");
+      setStageMessage(r2 ? "Uploading paired sequence arrays (R1 + R2)..." : "Uploading sequence array...");
 
       try {
         const cleanMeta = Object.fromEntries(
           Object.entries(meta).filter(([, v]) => v.trim() !== "")
         );
-        const result = await uploadSample(file, amplicon, cleanMeta);
+        const result = await uploadSample(r1, amplicon, cleanMeta, r2);
         const jid = result.sample.job_id;
         setJobId(jid);
         setUploadProgress(10);
         setStageMessage("Byte-stream complete. Initializing analysis daemon...");
 
         toast({
-          title: "Ingestion OK",
-          description: `${file.name} (${(file.size / 1024).toFixed(1)} KB) mapped to memory.`,
+          title: r2 ? "Paired ingestion OK" : "Ingestion OK",
+          description: r2
+            ? `${r1.name} + ${r2.name} mapped — pairs will be merged.`
+            : `${r1.name} (${(r1.size / 1024).toFixed(1)} KB) mapped to memory.`,
         });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Upload failed";
@@ -142,7 +159,7 @@ export const DemoUpload = () => {
     accept: {
       "application/octet-stream": [".fastq", ".fq", ".fasta", ".fa", ".fna", ".fastq.gz", ".fq.gz", ".fasta.gz", ".fa.gz", ".fna.gz"],
     },
-    maxFiles: 1,
+    maxFiles: 2,
     disabled: isProcessing || !isAuthenticated,
   });
 
@@ -285,6 +302,9 @@ export const DemoUpload = () => {
               </p>
               <p className="text-xs text-gray-500 tracking-widest uppercase">
                 Drag-and-drop or click to parse local file
+              </p>
+              <p className="text-[10px] text-gray-600 tracking-wider uppercase mt-2">
+                Paired-end? Drop both R1 + R2 — pairs are merged automatically
               </p>
             </>
           )}

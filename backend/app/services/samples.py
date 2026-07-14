@@ -113,6 +113,9 @@ async def upload_sample(
     content_type: str,
     amplicon: str,
     metadata: dict[str, Any] | None = None,
+    filename_r2: str | None = None,
+    stream_r2: BinaryIO | None = None,
+    content_type_r2: str | None = None,
 ) -> tuple[Job, Sample, StoredObject]:
     """Create a job + sample row and stream the bytes to object storage.
 
@@ -120,8 +123,15 @@ async def upload_sample(
     that each upload is independently trackable. In Phase 1f the job
     is enqueued to RQ; for now the Job row exists but nothing will pop
     it until the worker is wired up.
+
+    ``filename_r2`` / ``stream_r2`` are the optional reverse-reads (R2) mate for
+    paired-end input; when present it is stored alongside R1 and the QC stage
+    merges the pair.
     """
     _check_filename(filename)
+    paired = stream_r2 is not None and filename_r2 is not None
+    if paired:
+        _check_filename(filename_r2)  # type: ignore[arg-type]  # guarded by `paired`
     marker = _parse_amplicon(amplicon)
     settings = get_settings()
 
@@ -165,6 +175,25 @@ async def upload_sample(
         # put_stream refuses zero-byte uploads.
         raise EmptySample("Uploaded file was empty") from exc
 
+    # Optional R2 mate — stored under its own key; failures roll back the whole
+    # upload (the R1 object is left, but the job/sample rows are never committed
+    # without a complete pair, so a half-written pair can't be processed).
+    stored_r2: StoredObject | None = None
+    if paired:
+        key_r2 = storage.build_sample_key(user_id=user.id, job_id=job.id, filename=filename_r2)  # type: ignore[arg-type]
+        try:
+            stored_r2 = storage.put_stream(
+                key=key_r2,
+                stream=stream_r2,  # type: ignore[arg-type]  # guarded by `paired`
+                content_type=content_type_r2 or "application/octet-stream",
+                max_bytes=settings.MAX_UPLOAD_BYTES,
+            )
+        except FileTooLarge as exc:
+            msg = f"R2 upload exceeds the maximum of {settings.MAX_UPLOAD_BYTES} bytes"
+            raise SampleTooLarge(msg) from exc
+        except ValueError as exc:
+            raise EmptySample("Uploaded R2 file was empty") from exc
+
     sample = Sample(
         job_id=job.id,
         filename=filename,
@@ -172,6 +201,10 @@ async def upload_sample(
         sha256=stored.sha256,
         size_bytes=stored.size_bytes,
         content_type=stored.content_type,
+        filename_r2=filename_r2 if paired else None,
+        s3_key_r2=stored_r2.key if stored_r2 else None,
+        sha256_r2=stored_r2.sha256 if stored_r2 else None,
+        size_bytes_r2=stored_r2.size_bytes if stored_r2 else None,
         dwc_metadata=_clean_metadata(metadata),
     )
     session.add(sample)

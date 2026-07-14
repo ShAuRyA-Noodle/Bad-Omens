@@ -17,6 +17,10 @@ class SamplePublic(BaseModel):
     sha256: str
     size_bytes: int
     content_type: str
+    # Paired-end reverse-reads mate (R2); null for single-end uploads.
+    filename_r2: str | None = None
+    sha256_r2: str | None = None
+    size_bytes_r2: int | None = None
     num_reads: int | None
     read_length_mean: float | None
     primer_set: str | None

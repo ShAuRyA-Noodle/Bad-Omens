@@ -28,6 +28,7 @@ async def upload_sample(
     user: CurrentUser,
     session: SessionDep,
     file: UploadFile,
+    file_r2: UploadFile | None = None,
     amplicon: str = Form("16S_V4", description="Amplicon marker, e.g. 12S_MiFish, COI_Leray, 16S_V4"),
     metadata: str = Form("{}", description="Optional Darwin Core sample metadata as a JSON object."),
 ) -> SampleUploadResponse:
@@ -37,20 +38,24 @@ async def upload_sample(
             detail="Upload must include a filename",
         )
 
+    has_r2 = file_r2 is not None and file_r2.filename is not None and file_r2.filename.strip() != ""
+
     # Cheap early reject: refuse an obviously-oversized request by its declared
     # Content-Length before reading the body at all. The authoritative limit is
     # still enforced mid-stream in the service (the header can be spoofed).
+    # Each file has its own MAX_UPLOAD_BYTES ceiling, so a pair may declare ~2x.
     max_upload = get_settings().MAX_UPLOAD_BYTES
+    max_body = max_upload * (2 if has_r2 else 1)
     content_length = request.headers.get("content-length")
     if content_length is not None:
         try:
             declared = int(content_length)
         except ValueError:
             declared = 0
-        if declared > max_upload + (1 << 20):  # 1 MiB slack for multipart overhead
+        if declared > max_body + (1 << 20):  # 1 MiB slack for multipart overhead
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"Upload too large (declared {declared} bytes, max {max_upload})",
+                detail=f"Upload too large (declared {declared} bytes, max {max_body})",
             )
 
     try:
@@ -72,6 +77,9 @@ async def upload_sample(
             content_type=file.content_type or "application/octet-stream",
             amplicon=amplicon,
             metadata=metadata_obj,
+            filename_r2=file_r2.filename if has_r2 else None,
+            stream_r2=file_r2.file if has_r2 else None,
+            content_type_r2=(file_r2.content_type or "application/octet-stream") if has_r2 else None,
         )
     except samples_service.UnsupportedSampleFormat as exc:
         raise HTTPException(

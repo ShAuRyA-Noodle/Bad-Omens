@@ -131,6 +131,9 @@ export interface SamplePublic {
   sha256: string;
   size_bytes: number;
   content_type: string;
+  filename_r2: string | null;
+  sha256_r2: string | null;
+  size_bytes_r2: number | null;
   num_reads: number | null;
   read_length_mean: number | null;
   primer_set: string | null;
@@ -319,9 +322,13 @@ export async function uploadSample(
   file: File,
   amplicon: string,
   metadata?: Record<string, string>,
+  fileR2?: File | null,
 ): Promise<{ sample: SamplePublic; download_url: string }> {
   const form = new FormData();
   form.append("file", file);
+  if (fileR2) {
+    form.append("file_r2", fileR2);
+  }
   form.append("amplicon", amplicon);
   if (metadata && Object.keys(metadata).length > 0) {
     form.append("metadata", JSON.stringify(metadata));
