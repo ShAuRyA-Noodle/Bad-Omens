@@ -51,8 +51,8 @@ never 0.
 | `evenness` | Community evenness | 0.20 | Pielou's J′ (already computed by scikit-bio) | richness ≥ 2 |
 | `conservation_health` | Threat-weighted health | 0.25 | IUCN Red List category per detected species | ≥1 species has an IUCN category **and** the conservation lookup was **not degraded** |
 | `distinctness` | Biotic distinctness | 0.20 | GBIF global occurrence count per species | ≥1 species resolved to a GBIF occurrence count |
-| `invasive_pressure` | Invasive pressure | 0.15 | curated GISD invasive list | a versioned invasive list is loaded (**not yet — see Limitations**) |
-| `sampling_adequacy` | Sampling adequacy | 0.20 | rarefaction / multi-sample coverage | multi-sample input available (**not yet — see Limitations**) |
+| `invasive_pressure` | Invasive pressure | 0.15 | mounted GRIIS/GISD invasive checklist | a GRIIS/GISD list is mounted **and** ≥1 species was screened |
+| `sampling_adequacy` | Sampling adequacy | 0.20 | Good's coverage `C = 1 − F1/N` on the trimmed reads | read counts available (computed every run) |
 
 ### 1. Community evenness — `evenness`
 
@@ -101,23 +101,33 @@ Globally rare taxa (low GBIF occurrence) raise the score; cosmopolitan taxa
 detect biotically distinct / under-documented organisms. The reference
 `OCC_COMMON` is an explicit, tunable constant, not a hidden magic number.
 
-### 4. Invasive pressure — `invasive_pressure` *(pending)*
+### 4. Invasive pressure — `invasive_pressure`
 
 ```
-s_invasive = 1 − (invasive_detections / N_species)
+s_invasive = 1 − (invasive_detections / N_species_screened)
 ```
 
-Requires a versioned invasive-species list (GISD-derived). **Not yet shipped**,
-so this component is currently always *not assessed* and its weight is removed
-from the denominator — Relict will not pretend "0 invasives" when it has not
-actually checked. Lands with the conservation/IUCN-token rework.
+Screened against a mounted GRIIS/GISD checklist (Darwin Core CSV or a plain
+species list under `<REFERENCES_ROOT>/invasive/`; provision with
+`make download-invasive`). When no list is mounted the component is *not
+assessed* (weight removed from the denominator) — Relict will not pretend
+"0 invasives" when it has not actually checked. When a list is mounted, each
+detected species is matched by canonical binomial (also against its GBIF
+canonical name) and the fraction flagged invasive drives the sub-score.
 
-### 5. Sampling adequacy — `sampling_adequacy` *(pending)*
+### 5. Sampling adequacy — `sampling_adequacy`
 
-A defensible completeness estimate needs rarefaction or multi-sample
-extrapolation; Good's coverage and Chao1 are both degenerate on denoised,
-singleton-purged, single-sample data, so we deliberately **do not** fake one.
-*Not assessed* until multi-sample input is supported.
+```
+C = 1 − F1 / N     (Good's coverage)
+```
+
+`F1` = reads observed exactly once (singletons), `N` = total reads. Computed
+every run by a **separate, singleton-preserving dereplication** of the QC +
+primer-trimmed reads (`coverage.py`) — the ASV-inference dereplication drops
+singletons (`--minuniquesize 2`), which would make any coverage estimator on
+the ASV table degenerate, so this runs as its own pass and never perturbs ASV
+calling. High `C` means the sample was sequenced deeply enough that few taxa
+were seen only once.
 
 ## Score → grade
 
@@ -143,10 +153,14 @@ matrix in the UI links back to the exact manifest line that produced it.
 
 ## Limitations (stated up front)
 
-- Single-sample; no cross-sample or temporal comparison yet.
-- `conservation_health` is only as good as the taxonomy feeding it (Phase B
-  gating/LCA) and the IUCN coverage of the detected taxa.
-- `invasive_pressure` and `sampling_adequacy` are not yet computed.
+- `conservation_health` is only as good as the taxonomy feeding it (LCA
+  gating) and the IUCN coverage of the detected taxa. It needs
+  `IUCN_REDLIST_TOKEN` set; otherwise it is *not assessed*.
+- `invasive_pressure` needs a mounted GRIIS/GISD checklist; otherwise *not
+  assessed* (never a false "0 invasives").
+- `sampling_adequacy` uses Good's coverage on the trimmed reads — a
+  single-sample depth-completeness estimate, not a multi-sample rarefaction
+  extrapolation.
 - The weights are a defensible **default**, not an empirically optimised set;
   they are exposed precisely so they can be scrutinised and tuned.
 
