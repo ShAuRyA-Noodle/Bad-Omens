@@ -157,6 +157,10 @@ list-refs: ## Show available reference databases.
 download-invasive: ## Download the GRIIS invasive checklist (default: India). Override with COUNTRY="Sri Lanka".
 	python scripts/download_griis.py --country "$(or $(COUNTRY),India)"
 
+.PHONY: download-unite
+download-unite: ## Download the UNITE fungal ITS reference DB (for ITS2 taxonomy).
+	python scripts/download_unite.py
+
 # ─── Cleanup ──────────────────────────────────────────────────────────
 
 .PHONY: clean

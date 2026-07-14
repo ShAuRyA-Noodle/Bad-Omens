@@ -1,7 +1,10 @@
 """Stage 4: Taxonomic assignment via vsearch --usearch_global.
 
-Aligns each ASV centroid against a reference database (SILVA, MitoFish,
-or MIDORI2) and extracts the best-hit taxonomy lineage.
+Aligns each ASV centroid against a reference database (SILVA, MIDORI2, or
+UNITE) and extracts the best-hit taxonomy lineage. SILVA/MIDORI encode the
+lineage as a space-delimited ``;``-separated string; UNITE uses a
+whitespace-free header with Greengenes-style rank prefixes (``k__``…``s__``)
+after the last ``|`` — both are parsed here.
 
 The reference DB can be either a raw FASTA or a pre-built UDB index
 (faster). The downloader script builds the UDB automatically.
@@ -251,7 +254,28 @@ def _extract_lineage_from_target(target_id: str, ref_db: Path) -> list[str]:
     if not desc:
         return []
 
-    return [p.strip() for p in desc.split(";") if p.strip()]
+    prefixed = "__" in desc  # UNITE / Greengenes rank prefixes (k__, p__, …)
+    ranks = [_clean_rank_value(p) for p in desc.split(";") if p.strip()]
+    ranks = [r for r in ranks if r]
+
+    # UNITE species carry the full binomial (Genus_species). If the species
+    # repeats the genus, reduce it to the epithet so the downstream
+    # "genus + species" join (conservation lookup) doesn't double the genus.
+    if prefixed and len(ranks) > STANDARD_RANKS.index("species"):
+        gi, si = STANDARD_RANKS.index("genus"), STANDARD_RANKS.index("species")
+        if gi < len(ranks) and ranks[gi] and ranks[si].startswith(ranks[gi] + " "):
+            ranks[si] = ranks[si][len(ranks[gi]) + 1:]
+    return ranks
+
+
+def _clean_rank_value(value: str) -> str:
+    """Strip a Greengenes/UNITE rank prefix (``k__`` … ``s__``) if present and
+    turn the UNITE underscore-joined names into spaces. Non-prefixed values
+    (SILVA / MIDORI) are returned unchanged."""
+    v = value.strip()
+    if len(v) > 3 and v[1:3] == "__":
+        return v[3:].replace("_", " ").strip()
+    return v
 
 
 def _index_ref_headers(ref_db: Path) -> dict[str, str]:
@@ -268,6 +292,12 @@ def _index_ref_headers(ref_db: Path) -> dict[str, str]:
                 parts = header.split(None, 1)
                 accession = parts[0]
                 taxonomy = parts[1] if len(parts) > 1 else ""
+                # UNITE headers have no whitespace: the lineage is the last
+                # '|'-separated field, e.g. ...|reps|k__Fungi;p__…;s__Genus_sp.
+                if not taxonomy and "|" in accession and "__" in accession:
+                    taxonomy = next(
+                        (seg for seg in reversed(accession.split("|")) if "__" in seg), ""
+                    )
                 index[accession] = taxonomy
     return index
 
