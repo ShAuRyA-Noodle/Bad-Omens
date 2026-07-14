@@ -10,12 +10,19 @@ from typing import TYPE_CHECKING, cast
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Job, JobStatus, Project, User
+from app.core.logging import get_logger
+from app.db.models import Job, JobStatus, Project, ProjectOrdinationResult, User
 
 if TYPE_CHECKING:
     import uuid
 
     from sqlalchemy.ext.asyncio import AsyncSession
+
+log = get_logger(__name__)
+
+# RQ imports this by dotted path from the worker image.
+UNIFRAC_ENTRYPOINT = "worker.project_ordination.compute_project_unifrac"
+_UNIFRAC_METHOD = "weighted_unifrac"
 
 
 async def create_project(
@@ -85,4 +92,62 @@ async def attach_job(
     return job
 
 
-__all__ = ["attach_job", "create_project", "get_project", "list_projects_with_counts"]
+async def get_unifrac_result(
+    session: AsyncSession, *, project_id: uuid.UUID
+) -> ProjectOrdinationResult | None:
+    """Return the project's stored weighted-UniFrac result row, if any."""
+    return await session.scalar(
+        select(ProjectOrdinationResult).where(
+            ProjectOrdinationResult.project_id == project_id,
+            ProjectOrdinationResult.method == _UNIFRAC_METHOD,
+        )
+    )
+
+
+async def request_unifrac(
+    session: AsyncSession, *, user: User, project_id: uuid.UUID
+) -> ProjectOrdinationResult | None:
+    """Enqueue a weighted-UniFrac computation for the project (idempotent-ish).
+
+    Upserts a single (project, weighted_unifrac) row to ``computing`` and pushes
+    the worker job. Returns the row, or None if the project isn't the user's.
+    A recompute overwrites the previous result.
+    """
+    project = await session.scalar(
+        select(Project).where(Project.id == project_id, Project.user_id == user.id)
+    )
+    if project is None:
+        return None
+
+    row = await get_unifrac_result(session, project_id=project_id)
+    if row is None:
+        row = ProjectOrdinationResult(
+            project_id=project_id, method=_UNIFRAC_METHOD, status="computing", n_samples=0,
+        )
+        session.add(row)
+    else:
+        row.status = "computing"
+        row.error_message = None
+    await session.flush()
+
+    from app.services.queue import get_rq_queue
+
+    get_rq_queue().enqueue(
+        UNIFRAC_ENTRYPOINT,
+        kwargs={"project_id": str(project_id), "result_id": str(row.id)},
+        job_timeout="1h",
+        result_ttl=86_400,
+        failure_ttl=604_800,
+    )
+    log.info("project.unifrac_enqueued", project_id=str(project_id), result_id=str(row.id))
+    return row
+
+
+__all__ = [
+    "attach_job",
+    "create_project",
+    "get_project",
+    "get_unifrac_result",
+    "list_projects_with_counts",
+    "request_unifrac",
+]

@@ -13,6 +13,7 @@ from app.core.beta_diversity import bray_curtis_matrix, pcoa
 from app.db.models import ASV, DiversityMetric, IntegrityIndex, JobStatus, Sample
 from app.schemas.projects import (
     PcoaPoint,
+    PermanovaResult,
     ProjectCreate,
     ProjectDetail,
     ProjectJob,
@@ -20,6 +21,7 @@ from app.schemas.projects import (
     ProjectPublic,
     ProjectTimePoint,
     ProjectTimeSeries,
+    ProjectUnifrac,
 )
 from app.services import projects as projects_service
 
@@ -197,3 +199,49 @@ async def project_timeseries(project_id: uuid.UUID, user: CurrentUser, session: 
     if not points:
         msg = "No completed samples have a collection date yet. Add an eventDate when uploading to build a trend."
     return ProjectTimeSeries(n_dated=len(points), n_undated=n_undated, points=points, message=msg)
+
+
+def _unifrac_response(row: object | None) -> ProjectUnifrac:
+    """Serialize a stored ProjectOrdinationResult row into the API shape."""
+    if row is None:
+        return ProjectUnifrac(status="absent")
+    status = row.status  # type: ignore[attr-defined]
+    if status in ("computing", "failed"):
+        return ProjectUnifrac(
+            status=status,
+            n_samples=row.n_samples,  # type: ignore[attr-defined]
+            error_message=row.error_message,  # type: ignore[attr-defined]
+        )
+    data = row.data or {}  # type: ignore[attr-defined]
+    perm = data.get("permanova")
+    return ProjectUnifrac(
+        status="succeeded",
+        method=data.get("method", "weighted_unifrac"),
+        n_samples=data.get("n_samples", row.n_samples),  # type: ignore[attr-defined]
+        proportion_explained=data.get("proportion_explained", []),
+        points=[PcoaPoint(**p) for p in data.get("points", [])],
+        permanova=PermanovaResult(**perm) if perm else None,
+        message=data.get("message"),
+        computed_at=data.get("computed_at"),
+    )
+
+
+@router.post("/{project_id}/unifrac", response_model=ProjectUnifrac, status_code=status.HTTP_202_ACCEPTED, summary="Enqueue weighted-UniFrac ordination")
+async def request_unifrac(project_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> ProjectUnifrac:
+    """Kick off the async worker that builds a shared tree and computes weighted
+    UniFrac + PERMANOVA over the project's completed samples. Poll GET to read it.
+    """
+    row = await projects_service.request_unifrac(session, user=user, project_id=project_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return _unifrac_response(row)
+
+
+@router.get("/{project_id}/unifrac", response_model=ProjectUnifrac, summary="Weighted-UniFrac ordination result")
+async def get_unifrac(project_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> ProjectUnifrac:
+    """Return the stored weighted-UniFrac result (status: absent/computing/succeeded/failed)."""
+    project = await projects_service.get_project(session, user=user, project_id=project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    row = await projects_service.get_unifrac_result(session, project_id=project_id)
+    return _unifrac_response(row)

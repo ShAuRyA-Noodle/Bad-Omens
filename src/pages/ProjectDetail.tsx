@@ -1,13 +1,16 @@
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis,
   LineChart, Line, Legend,
 } from "recharts";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { getProject, getProjectOrdination, getProjectTimeseries } from "@/lib/api";
-import { ArrowLeft, ChevronRight, GitCompareArrows, TrendingUp } from "lucide-react";
+import {
+  getProject, getProjectOrdination, getProjectTimeseries,
+  getProjectUnifrac, requestProjectUnifrac,
+} from "@/lib/api";
+import { ArrowLeft, ChevronRight, GitCompareArrows, TrendingUp, Trees, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STATUS_CLS: Record<string, string> = {
@@ -106,6 +109,9 @@ export default function ProjectDetail() {
             )}
           </div>
 
+          {/* Cross-sample phylogenetic ordination — weighted UniFrac (async) */}
+          {(project?.succeeded_count ?? 0) >= 2 && <UnifracPanel projectId={projectId} />}
+
           {/* Temporal trend — EII + diversity over collection dates */}
           {trend && (trend.points.length > 0 || (trend.n_undated ?? 0) > 0) && (
             <div className="border border-white/15 bg-black/60 backdrop-blur-md hud-bracket mb-6 p-4 sm:p-6">
@@ -183,6 +189,101 @@ export default function ProjectDetail() {
         </div>
       </main>
       <Footer />
+    </div>
+  );
+}
+
+function UnifracPanel({ projectId }: { projectId: string }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["project-unifrac", projectId],
+    queryFn: () => getProjectUnifrac(projectId),
+    // Poll while the worker is building the tree; stop once it settles.
+    refetchInterval: (q) => (q.state.data?.status === "computing" ? 3000 : false),
+    retry: false,
+  });
+  const compute = useMutation({
+    mutationFn: () => requestProjectUnifrac(projectId),
+    onSuccess: (r) => qc.setQueryData(["project-unifrac", projectId], r),
+  });
+
+  const status = data?.status ?? "absent";
+  const computing = status === "computing" || compute.isPending;
+  const pct = (i: number) =>
+    data?.proportion_explained?.[i] != null ? `${(data.proportion_explained[i] * 100).toFixed(1)}%` : "";
+  const points = (data?.points ?? []).map((p) => ({ x: p.pc1, y: p.pc2, label: p.label, job_id: p.job_id }));
+  const perm = data?.permanova;
+
+  return (
+    <div className="border border-white/15 bg-black/60 backdrop-blur-md hud-bracket mb-6 p-4 sm:p-6">
+      <div className="flex items-center justify-between text-[11px] text-gray-500 mb-4 border-b border-white/10 pb-2 uppercase tracking-widest">
+        <span className="flex items-center gap-2"><Trees className="w-3.5 h-3.5" /> Phylogenetic Ordination · Weighted UniFrac</span>
+        <button
+          onClick={() => compute.mutate()}
+          disabled={computing}
+          className="text-[10px] border border-white/15 px-3 py-1.5 text-gray-300 hover:text-neon-cyan hover:border-neon-cyan disabled:opacity-40 disabled:cursor-not-allowed transition-colors normal-case"
+        >
+          {computing ? "Computing…" : status === "succeeded" ? "Recompute" : "Compute UniFrac"}
+        </button>
+      </div>
+
+      {computing ? (
+        <div className="h-64 flex flex-col items-center justify-center text-gray-400 gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-neon-cyan" />
+          <p className="text-xs uppercase tracking-widest">Building shared tree · MAFFT → FastTree → UniFrac</p>
+        </div>
+      ) : status === "failed" ? (
+        <p className="text-sm text-red-400 py-8 text-center">UniFrac failed: {data?.error_message ?? "unknown error"}</p>
+      ) : status === "succeeded" && points.length > 0 ? (
+        <>
+          <div className="h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ top: 10, right: 20, bottom: 24, left: 8 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" />
+                <XAxis type="number" dataKey="x" name="PC1" tick={{ fill: "#9ca3af", fontSize: 10 }} stroke="rgba(255,255,255,0.2)"
+                  label={{ value: `PC1 ${pct(0)}`, position: "bottom", fill: "#6b7280", fontSize: 11 }} />
+                <YAxis type="number" dataKey="y" name="PC2" tick={{ fill: "#9ca3af", fontSize: 10 }} stroke="rgba(255,255,255,0.2)"
+                  label={{ value: `PC2 ${pct(1)}`, angle: -90, position: "left", fill: "#6b7280", fontSize: 11 }} />
+                <ZAxis range={[120, 120]} />
+                <Tooltip
+                  cursor={{ stroke: "rgba(192,132,252,0.3)" }}
+                  contentStyle={{ background: "#000", border: "1px solid rgba(255,255,255,0.2)", fontFamily: "monospace", fontSize: 11 }}
+                  formatter={(v: number) => v.toFixed(3)}
+                  labelFormatter={() => ""}
+                />
+                <Scatter data={points} fill="#c084fc" fillOpacity={0.8} />
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+          {perm && (
+            <div className="mt-3 text-[11px] border border-white/10 bg-white/5 p-3">
+              <span className="text-gray-500 uppercase tracking-widest">PERMANOVA · by {perm.grouping_field} </span>
+              {perm.applicable ? (
+                <span className="text-gray-300">
+                  {perm.n_groups} groups · pseudo-F {perm.pseudo_f != null ? perm.pseudo_f.toFixed(2) : "∞"} ·{" "}
+                  <span className={cn(perm.p_value != null && perm.p_value < 0.05 ? "text-neon-green" : "text-gray-300")}>
+                    p = {perm.p_value?.toFixed(3)}
+                  </span>{" "}
+                  ({perm.permutations} permutations)
+                  {perm.note && <span className="block text-gray-500 mt-1">{perm.note}</span>}
+                </span>
+              ) : (
+                <span className="text-gray-500">{perm.note}</span>
+              )}
+            </div>
+          )}
+          <p className="text-[11px] text-gray-500 mt-2">
+            Weighted UniFrac weights community differences by the branch length separating their taxa on a
+            shared tree — phylogenetic beta-diversity, not just presence/absence.
+          </p>
+        </>
+      ) : status === "succeeded" && data?.message ? (
+        <p className="text-sm text-gray-400 py-8 text-center">{data.message}</p>
+      ) : (
+        <p className="text-sm text-gray-400 py-8 text-center">
+          Build a shared phylogenetic tree across this project's samples and compute weighted UniFrac + PERMANOVA.
+        </p>
+      )}
     </div>
   );
 }

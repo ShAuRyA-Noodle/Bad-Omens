@@ -73,3 +73,33 @@ class ProjectTimeSeries(BaseModel):
     n_undated: int
     points: list[ProjectTimePoint] = []
     message: str | None = None
+
+
+class PermanovaResult(BaseModel):
+    """PERMANOVA test of whether a grouping explains community structure."""
+
+    applicable: bool
+    grouping_field: str
+    note: str | None = None
+    n_groups: int | None = None
+    pseudo_f: float | None = None
+    p_value: float | None = None
+    permutations: int | None = None
+
+
+class ProjectUnifrac(BaseModel):
+    """Async weighted-UniFrac ordination (+ PERMANOVA) for a project.
+
+    ``status`` is one of: ``absent`` (never requested), ``computing`` (worker
+    running), ``succeeded``, ``failed``.
+    """
+
+    status: str
+    method: str = "weighted_unifrac"
+    n_samples: int = 0
+    proportion_explained: list[float] = []
+    points: list[PcoaPoint] = []
+    permanova: PermanovaResult | None = None
+    message: str | None = None
+    error_message: str | None = None
+    computed_at: str | None = None

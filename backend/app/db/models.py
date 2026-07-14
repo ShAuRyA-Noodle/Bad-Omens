@@ -172,6 +172,44 @@ class Project(UUIDPrimaryKey, Timestamped, Base):
 
     user: Mapped[User] = relationship("User", back_populates="projects")
     jobs: Mapped[list[Job]] = relationship("Job", back_populates="project")
+    ordination_results: Mapped[list[ProjectOrdinationResult]] = relationship(
+        "ProjectOrdinationResult",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class ProjectOrdinationResult(UUIDPrimaryKey, Timestamped, Base):
+    """Async cross-sample phylogenetic ordination (weighted UniFrac) for a project.
+
+    Unlike Bray-Curtis PCoA — which is cheap and computed inline in the API —
+    UniFrac needs a de-novo tree over the union of every sample's ASVs (MAFFT +
+    FastTree), which only the worker image can build. The API enqueues a worker
+    job that fills this row; the frontend polls it. One row per (project, method);
+    recomputing overwrites it. ``data`` holds the PCoA points + proportions +
+    PERMANOVA result, all reproducible from the same inputs.
+    """
+
+    __tablename__ = "project_ordination_results"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    method: Mapped[str] = mapped_column(String(32), nullable=False, default="weighted_unifrac")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="computing")
+    n_samples: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    data: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+    project: Mapped[Project] = relationship("Project", back_populates="ordination_results")
+
+    __table_args__ = (
+        UniqueConstraint("project_id", "method", name="uq_project_ordination_method"),
+    )
 
 
 # ─── Jobs + Samples ─────────────────────────────────────────────────────
@@ -578,6 +616,7 @@ __all__ = [
     "JobStatus",
     "OrdinationResult",
     "Project",
+    "ProjectOrdinationResult",
     "Provenance",
     "RefreshSession",
     "Sample",

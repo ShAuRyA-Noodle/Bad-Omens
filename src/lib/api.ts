@@ -292,6 +292,28 @@ export interface ProjectTimeSeries {
   message: string | null;
 }
 
+export interface PermanovaResult {
+  applicable: boolean;
+  grouping_field: string;
+  note: string | null;
+  n_groups: number | null;
+  pseudo_f: number | null;
+  p_value: number | null;
+  permutations: number | null;
+}
+
+export interface ProjectUnifrac {
+  status: "absent" | "computing" | "succeeded" | "failed";
+  method: string;
+  n_samples: number;
+  proportion_explained: number[];
+  points: PcoaPoint[];
+  permanova: PermanovaResult | null;
+  message: string | null;
+  error_message: string | null;
+  computed_at: string | null;
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────
 
 export async function signup(email: string, password: string): Promise<TokenPair> {
@@ -431,6 +453,14 @@ export async function getProjectOrdination(projectId: string): Promise<ProjectOr
 
 export async function getProjectTimeseries(projectId: string): Promise<ProjectTimeSeries> {
   return apiFetch<ProjectTimeSeries>(`/projects/${projectId}/timeseries`);
+}
+
+export async function getProjectUnifrac(projectId: string): Promise<ProjectUnifrac> {
+  return apiFetch<ProjectUnifrac>(`/projects/${projectId}/unifrac`);
+}
+
+export async function requestProjectUnifrac(projectId: string): Promise<ProjectUnifrac> {
+  return apiFetch<ProjectUnifrac>(`/projects/${projectId}/unifrac`, { method: "POST" });
 }
 
 export interface OrdinationPoint {
