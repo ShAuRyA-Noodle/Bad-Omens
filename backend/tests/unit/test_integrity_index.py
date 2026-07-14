@@ -80,6 +80,34 @@ def test_nothing_assessable_returns_null() -> None:
     assert result.assessed_weight == 0.0
 
 
+def test_invasive_pressure_assessed_when_list_loaded() -> None:
+    # 1 of 2 screened species is invasive -> pressure sub-score = 1 - 1/2 = 0.5.
+    records = [
+        {"species": "Native one", "iucn_category": "LC", "gbif_occurrence_count": 1000, "is_invasive": False},
+        {"species": "Invasive two", "iucn_category": "LC", "gbif_occurrence_count": 1000, "is_invasive": True},
+    ]
+    result = eii.compute_eii(
+        richness=5, shannon=math.log(5), evenness=1.0,
+        conservation_records=records, api_degraded=False, invasive_list_loaded=True,
+    )
+    by_key = {c.key: c for c in result.components}
+    assert by_key["invasive_pressure"].available is True
+    assert by_key["invasive_pressure"].value == pytest.approx(0.5)
+    # invasive weight (0.15) now counts toward the denominator.
+    assert result.assessed_weight == pytest.approx(0.20 + 0.25 + 0.20 + 0.15)
+
+
+def test_invasive_pressure_unavailable_without_list() -> None:
+    records = [{"species": "x", "iucn_category": "LC", "gbif_occurrence_count": 1000, "is_invasive": False}]
+    result = eii.compute_eii(
+        richness=5, shannon=math.log(5), evenness=1.0,
+        conservation_records=records, api_degraded=False, invasive_list_loaded=False,
+    )
+    by_key = {c.key: c for c in result.components}
+    assert by_key["invasive_pressure"].available is False
+    assert "no invasive checklist" in by_key["invasive_pressure"].detail
+
+
 def test_deterministic() -> None:
     records = [{"species": "a", "iucn_category": "VU", "gbif_occurrence_count": 500}]
     a = eii.compute_eii(

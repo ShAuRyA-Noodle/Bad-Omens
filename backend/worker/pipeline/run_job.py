@@ -417,12 +417,17 @@ def run_job(job_id: str) -> dict[str, str]:
                 bool(conservation_result.metrics.get("api_degraded"))
                 if conservation_result else False
             )
+            invasive_list_loaded = (
+                bool(conservation_result.metrics.get("invasive_list_loaded"))
+                if conservation_result else False
+            )
             eii_result = compute_eii(
                 richness=div_result.metrics.get("richness"),
                 shannon=div_result.metrics.get("shannon"),
                 evenness=div_result.metrics.get("evenness"),
                 conservation_records=cons_records,
                 api_degraded=api_degraded,
+                invasive_list_loaded=invasive_list_loaded,
             )
             stage_results.append({
                 "stage": "integrity_index",

@@ -14,6 +14,8 @@ from worker.pipeline import conservation as cons
 
 class _StubSettings:
     IUCN_REDLIST_TOKEN = None
+    # Points at a dir with no invasive list -> screening reported as unavailable.
+    REFERENCES_ROOT = "/nonexistent/references"
 
 
 def _write_taxonomy(tmp_path):

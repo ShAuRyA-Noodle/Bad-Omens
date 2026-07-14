@@ -142,6 +142,24 @@ def _distinctness_score(
     return _clamp01(score), f"mean GBIF rarity over {len(occs)} species"
 
 
+def _invasive_pressure_score(
+    *, records: list[dict[str, Any]], invasive_list_loaded: bool
+) -> tuple[float | None, str]:
+    """Integrity falls as the invasive fraction of the community rises.
+
+    Only assessable when an invasive checklist (GRIIS/GISD) was actually
+    screened against — otherwise unavailable, never a flattering default.
+    """
+    if not invasive_list_loaded:
+        return None, "no invasive checklist mounted — screening unavailable"
+    species = [r for r in records if (r.get("species") or r.get("gbif_matched_name"))]
+    if not species:
+        return None, "no species-level taxa to screen for invasives"
+    n_invasive = sum(1 for r in species if r.get("is_invasive"))
+    score = 1.0 - n_invasive / len(species)
+    return _clamp01(score), f"1 − {n_invasive} invasive / {len(species)} screened species"
+
+
 def compute_eii(
     *,
     richness: int | None,
@@ -149,6 +167,7 @@ def compute_eii(
     evenness: float | None,
     conservation_records: list[dict[str, Any]] | None,
     api_degraded: bool,
+    invasive_list_loaded: bool = False,
 ) -> EIIResult:
     """Compute the EII from real per-run signals. Pure & deterministic."""
     records = conservation_records or []
@@ -158,6 +177,9 @@ def compute_eii(
     )
     he_val, he_detail = _health_score(records=records, api_degraded=api_degraded)
     di_val, di_detail = _distinctness_score(records=records)
+    iv_val, iv_detail = _invasive_pressure_score(
+        records=records, invasive_list_loaded=invasive_list_loaded
+    )
 
     components = [
         EIIComponent(
@@ -174,17 +196,20 @@ def compute_eii(
             weight=WEIGHTS["distinctness"],
             available=di_val is not None, value=di_val, detail=di_detail,
         ),
-        # Pending components — never defaulted; weight is removed from the
-        # denominator until they ship (see methodology Limitations).
         EIIComponent(
             key="invasive_pressure", name="Invasive pressure",
-            weight=WEIGHTS["invasive_pressure"], available=False,
-            detail="not assessed — no curated invasive list loaded yet",
+            weight=WEIGHTS["invasive_pressure"],
+            available=iv_val is not None, value=iv_val, detail=iv_detail,
         ),
+        # Pending — never defaulted; weight is removed from the denominator
+        # until it ships (see methodology Limitations). Sampling adequacy needs
+        # a rarefaction estimator; the ASV table has singletons removed upstream
+        # (vsearch --minuniquesize 2), so a Good's-coverage proxy would be a
+        # degenerate constant — deliberately not faked.
         EIIComponent(
             key="sampling_adequacy", name="Sampling adequacy",
             weight=WEIGHTS["sampling_adequacy"], available=False,
-            detail="not assessed — needs multi-sample / rarefaction",
+            detail="not assessed — needs a rarefaction estimator (singletons removed upstream)",
         ),
     ]
 

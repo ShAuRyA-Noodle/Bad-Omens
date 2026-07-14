@@ -12,9 +12,10 @@ module:
    keyed by the GBIF taxon key from step 1. (We use GBIF's mirror rather
    than the IUCN API directly; the provenance manifest records the real
    source as ``gbif-iucn-mirror`` accordingly.)
-4. Flags known invasive species against the Global Invasive Species
-   Database (GISD) — currently via a curated local list; API
-   integration is Phase 3.5.
+4. Flags known invasive species against a mounted GRIIS/GISD checklist
+   (Darwin Core CSV or a plain species list under
+   ``<REFERENCES_ROOT>/invasive/``). When no list is mounted, invasive
+   status is reported as "not screened" rather than a false "not invasive".
 
 Results are cached in the ``conservation_cache`` Postgres table with
 a 30-day TTL so repeated analyses of the same species don't hammer
@@ -25,9 +26,11 @@ open eDNA tool automates this cross-referencing step.
 """
 from __future__ import annotations
 
+import csv
 import json
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +41,12 @@ from app.core.logging import get_logger
 from worker.pipeline import StageResult, StageTimer, ensure_stage_dir
 
 log = get_logger(__name__)
+
+# GRIIS / GISD invasive-species checklists are mounted here (Darwin Core CSV or
+# a plain newline-delimited species list), same pattern as the reference DBs.
+_INVASIVE_DIRNAME = "invasive"
+# Columns a GRIIS Darwin Core archive uses for the scientific name, in priority.
+_INVASIVE_NAME_COLUMNS = ("canonicalName", "scientificName", "species", "acceptedNameUsage")
 
 GBIF_SPECIES_MATCH_URL = "https://api.gbif.org/v1/species/match"
 GBIF_OCCURRENCE_SEARCH_URL = "https://api.gbif.org/v1/occurrence/search"
@@ -144,11 +153,16 @@ def run(
                 metrics={"skipped": True, "species_queried": 0},
             )
 
+        invasive_set, invasive_source = _load_invasive_set(settings.REFERENCES_ROOT)
+        invasive_list_loaded = invasive_source is not None
+
         records: list[ConservationRecord] = []
         for species_name in species_list:
             record = _lookup_species(
                 species_name, iucn_token=iucn_token, kingdom_hint=kingdom_hint, logger=logger
             )
+            if invasive_list_loaded:
+                _flag_invasive(record, invasive_set)
             records.append(record)
             time.sleep(0.2)
 
@@ -169,6 +183,10 @@ def run(
             ),
             "lookup_failed_count": lookup_failed_count,
             "api_degraded": lookup_failed_count > 0,
+            # Invasive screening — honest about whether a list was even loaded.
+            "invasive_list_loaded": invasive_list_loaded,
+            "invasive_source": invasive_source,
+            "invasive_count": sum(1 for r in records if r.is_invasive),
             "records": [r.to_dict() for r in records],
         }
 
@@ -199,8 +217,65 @@ def run(
             "threatened_count": result_data["threatened_count"],
             "lookup_failed_count": result_data["lookup_failed_count"],
             "api_degraded": result_data["api_degraded"],
+            "invasive_list_loaded": result_data["invasive_list_loaded"],
+            "invasive_count": result_data["invasive_count"],
         },
     )
+
+
+def _canonical_binomial(name: str) -> str:
+    """Lowercased first-two-token binomial, for name-set matching."""
+    parts = name.strip().split()
+    return " ".join(parts[:2]).lower() if len(parts) >= 2 else name.strip().lower()
+
+
+@lru_cache(maxsize=4)
+def _load_invasive_set(references_root: str) -> tuple[frozenset[str], str | None]:
+    """Load the invasive-species name set from ``<references_root>/invasive/``.
+
+    Supports GRIIS/GISD Darwin Core CSV/TSV (reads a canonical/scientific name
+    column) and plain newline-delimited species lists. Returns
+    ``(name_set, source_filename)`` — an empty set with ``None`` source when no
+    list is mounted, so the caller can honestly distinguish "checked, none
+    invasive" from "no list loaded". Cached per references_root.
+    """
+    invasive_dir = Path(references_root) / _INVASIVE_DIRNAME
+    if not invasive_dir.exists():
+        return frozenset(), None
+
+    names: set[str] = set()
+    source: str | None = None
+    for path in sorted(invasive_dir.glob("*")):
+        if path.suffix.lower() not in (".csv", ".tsv", ".txt"):
+            continue
+        source = path.name
+        if path.suffix.lower() in (".csv", ".tsv"):
+            delimiter = "\t" if path.suffix.lower() == ".tsv" else ","
+            with open(path, encoding="utf-8", errors="replace") as f:
+                reader = csv.DictReader(f, delimiter=delimiter)
+                name_col = next(
+                    (c for c in _INVASIVE_NAME_COLUMNS if reader.fieldnames and c in reader.fieldnames),
+                    None,
+                )
+                for row in reader:
+                    raw = (row.get(name_col) if name_col else None) or next(iter(row.values()), "")
+                    if raw and raw.strip():
+                        names.add(_canonical_binomial(raw))
+        else:  # plain species list, one per line
+            with open(path, encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    if line.strip() and not line.startswith("#"):
+                        names.add(_canonical_binomial(line))
+
+    return frozenset(names), source
+
+
+def _flag_invasive(record: ConservationRecord, invasive_set: frozenset[str]) -> None:
+    """Set ``is_invasive`` if the species (or its GBIF canonical name) is listed."""
+    candidates = [record.species]
+    if record.gbif_matched_name:
+        candidates.append(record.gbif_matched_name)
+    record.is_invasive = any(_canonical_binomial(c) in invasive_set for c in candidates)
 
 
 def _extract_species_from_taxonomy(taxonomy_tsv: Path) -> list[str]:
